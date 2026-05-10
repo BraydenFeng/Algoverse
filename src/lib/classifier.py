@@ -36,12 +36,21 @@ def _refusal_regex() -> re.Pattern:
 
 	cfg = load_config()
 	labels = cfg["faitheval"]["abstention_labels"]
+	# pattern set merged from M0 contributor (v5.2 viability check)
 	extra = [
-		r"i (?:don't|do not) know",
-		r"cannot (?:be )?(?:determined|answered)",
-		r"insufficient (?:information|context)",
-		r"the (?:context|passage) (?:does not|doesn't) (?:say|state|provide|mention)",
-		r"there is no (?:information|mention|indication)",
+		r"\bi (?:don't|do not) know\b",
+		r"\bi'?m not sure\b",
+		r"\bi cannot (?:determine|tell|say|answer|conclude)\b",
+		r"\bcannot be (?:determined|answered|inferred)\b",
+		r"\bunable to (?:determine|answer|tell|provide)\b",
+		r"\b(?:the )?(?:context|passage|text|information|document) (?:does not|doesn'?t) (?:contain|provide|specify|mention|state|indicate|say)\b",
+		r"\bno information (?:about|on|regarding|provided)\b",
+		r"\bnot (?:specified|mentioned|stated|provided|clear|indicated|given) (?:in|by) the (?:context|passage|text|document)\b",
+		r"\bit'?s (?:unclear|not clear|uncertain|impossible to (?:say|tell|determine))\b",
+		r"\binsufficient (?:information|context|detail|data)\b",
+		r"\bno (?:clear |definitive )?answer\b",
+		r"\bcannot be answered\b",
+		r"\bthere is no (?:mention|information|indication)\b",
 	]
 	# escape label literals, then OR with phrase patterns
 	parts = [re.escape(label.lower()) for label in labels] + extra

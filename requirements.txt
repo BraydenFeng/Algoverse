@@ -1,13 +1,12 @@
-torch>=2.3
-transformers>=4.45
-accelerate>=0.34
-sae-lens>=4.0
-datasets>=3.0
-huggingface_hub>=0.25
-anthropic>=0.40
+torch>=2.1.0
+transformers>=4.45.0
+datasets>=2.14.0
+accelerate>=0.30.0
+huggingface_hub>=0.25.0
+anthropic>=0.40.0
 numpy>=1.26
 pandas>=2.2
-scikit-learn>=1.5
-tqdm>=4.66
 pyyaml>=6.0
-matplotlib>=3.9
+tqdm>=4.66
+# sae-lens — only needed for M4 mediation; uncomment when phase 5 starts
+# sae-lens>=4.0
