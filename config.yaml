@@ -1,40 +1,49 @@
-# central config shared across notebooks and src/
+# central config — v2 workshop scope (Brayden, Gemma-only modules)
+# matches raw/paper/proposal-v5.tex
 # override per-environment with env vars where noted
 
 models:
 	primary:
-		hf_id: "google/gemma-3-12b-pt"
+		hf_id: "google/gemma-2-9b-it"
 		dtype: "bfloat16"
-		n_layers: 48
-		extraction_layer: 32  # ~2/3 depth per Anthropic protocol
-	fallback_it:
-		hf_id: "google/gemma-3-12b-it"
-		dtype: "bfloat16"
+		n_layers: 42
+		extraction_layer: 28  # ~2/3 depth per Anthropic protocol
+		uses_chat_template: true
 	sanity:
-		hf_id: "google/gemma-2-2b"  # smoke-test only, fits on T4
+		hf_id: "google/gemma-2-2b-it"  # smoke-test only; fits on T4 in bf16
 		dtype: "bfloat16"
+		uses_chat_template: true
 
 sae:
-	# Gemma Scope 2, residual-stream post, mid-layer
-	release: "gemma-scope-2-12b-pt-resid-post"
-	layer: 32
+	# Gemma Scope (original; not Scope 2) — Ferrando et al. used this for the unknown-entity latent on Gemma-2-9B
+	release: "gemma-scope-9b-it-res"
+	layer: 28
 	width: "16k"
-	l0_target: "medium"
+	# l0 target — confirm exact name from sae_lens release registry when M4 mediation runs
+	l0_target: "average_l0_75"
+	# unknown-entity feature index from Ferrando v2 Appendix Q — TODO: pull from paper supplement
+	unknown_entity_feature_idx: null
 
 extraction:
-	# Anthropic protocol (Sofroniew/Lindsey 2026)
-	topics_per_emotion: 100
-	stories_per_topic: 12
-	token_skip: 50
-	pc_project_out_variance: 0.50
+	# Anthropic protocol (Sofroniew/Lindsey 2026), scaled per v2 LaTeX §4
+	stories_per_emotion: 20  # v2 §4; tunable — see memory feedback_story_count_tunable
+	story_generator_model: "claude-opus-4-7"  # v2 §4 locks Opus 4.7 as the generator
+	story_target_word_count: 400  # ~few hundred words per Anthropic protocol
+	token_skip: 50  # average activations from token 50 onward
+	pc_project_out_variance: 0.50  # project out neutral-corpus PCs explaining 50% variance
 	l2_normalize: true
 	emotions:
-		# TODO: confirm 5 fitted with Akshat before May 15 prereg lock
+		# v2 control-emotion question resolved 2026-05-10 (Brayden)
+		# LaTeX §3 extraction paragraph still lists "loving, nostalgic" — stale; needs edit
 		- desperation
 		- calm
 		- sad
 		- angry
-		- loving
+
+steering:
+	# Anthropic range 0.025-0.1 (fraction of residual norm); v2 sweeps this
+	alpha_sweep: [0.025, 0.05, 0.075, 0.1]
+	mmlu_drop_tolerance: 0.01  # v2 §3 capability gate: max 1pt drop
 
 faitheval:
 	hf_dataset: "Salesforce/FaithEval-unanswerable-v1.0"
@@ -52,17 +61,22 @@ faitheval:
 		Question: {question}
 		Answer:
 
-steering:
-	# Anthropic range 0.025-0.1 (fraction of residual norm)
-	alpha: 0.05
+mmlu:
+	hf_dataset: "cais/mmlu"
+	# stratified sample across 57 subjects per v2 §4
+	samples_per_subject: 20
+
+mediation:
+	# v2 §3: Imai 2010 causal mediation on Gemma-2-9B only
+	method: "imai_2010"
+	# proportion of indirect effect through unknown-entity suppression that the team targets
+	# v2 reports the estimate; no hard threshold in approved LaTeX
 
 paths:
-	# local defaults; override via env vars on Colab/Vast/Lambda
 	data_dir: "data"
 	outputs_dir: "outputs"
-	hf_artifact_repo: "bray/desperation-circuit-artifacts"  # private dataset repo
+	hf_artifact_repo: "bray/desperation-circuit-artifacts"
 
 secrets:
-	# read from env, never commit
 	hf_token_env: "HF_TOKEN"
 	anthropic_key_env: "ANTHROPIC_API_KEY"

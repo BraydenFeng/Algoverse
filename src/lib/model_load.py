@@ -15,13 +15,12 @@ _DTYPE_MAP = {
 }
 
 
-def load_gemma(variant: Literal["primary", "fallback_it", "sanity"] = "primary"):
+def load_gemma(variant: Literal["primary", "sanity"] = "primary"):
 	"""Return (model, tokenizer) for the requested config variant.
 
 	variant:
-		"primary"     -> Gemma-3-12B PT (default)
-		"fallback_it" -> Gemma-3-12B IT (if M0.0 says PT refuses too rarely)
-		"sanity"      -> Gemma-2-2B (smoke test on T4)
+		"primary" -> Gemma-2-9B-IT (v2 target)
+		"sanity"  -> Gemma-2-2B-IT (smoke test on T4)
 	"""
 	cfg = load_config()
 	model_cfg = cfg["models"][variant]
@@ -42,3 +41,11 @@ def load_gemma(variant: Literal["primary", "fallback_it", "sanity"] = "primary")
 
 	model.eval()
 	return model, tokenizer
+
+
+def apply_chat_template(tokenizer, user_text: str) -> str:
+	"""Wrap a user message in Gemma's chat template. v2 uses IT models, so chat formatting matters."""
+	messages = [{"role": "user", "content": user_text}]
+	return tokenizer.apply_chat_template(
+		messages, tokenize=False, add_generation_prompt=True
+	)
