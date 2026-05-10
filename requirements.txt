@@ -1,0 +1,13 @@
+torch>=2.3
+transformers>=4.45
+accelerate>=0.34
+sae-lens>=4.0
+datasets>=3.0
+huggingface_hub>=0.25
+anthropic>=0.40
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5
+tqdm>=4.66
+pyyaml>=6.0
+matplotlib>=3.9

@@ -1,0 +1,31 @@
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# jupyter
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# data and outputs (push to HF Hub, not git)
+outputs/
+data/stories/
+data/faitheval/cache/
+data/counterfact/cache/
+data/neutral_corpus/cache/
+*.npy
+*.safetensors
+*.pt
+*.bin
+
+# secrets
+*.key
+.hf_token
+.anthropic_key
+
+# os
+.DS_Store
+Thumbs.db
