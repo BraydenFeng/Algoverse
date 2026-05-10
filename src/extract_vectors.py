@@ -178,6 +178,9 @@ def extract_all(model, tokenizer) -> dict[str, ExtractionResult]:
 			n_stories_used=per_emotion_story_means[e].shape[0],
 		)
 
+	# how many neutral PCs were projected out — useful for sanity-checking the project-out step
+	n_pcs_projected = int(np.linalg.matrix_rank(np.eye(projector.shape[0]) - projector))
+
 	# log + cosine sanity check
 	log = {
 		"layer": layer,
@@ -185,6 +188,8 @@ def extract_all(model, tokenizer) -> dict[str, ExtractionResult]:
 		"pc_project_out_variance": var_explained,
 		"l2_normalize": do_l2,
 		"n_stories": {e: results[e].n_stories_used for e in emotions},
+		"n_neutral_used": int(neutral_vecs.shape[0]),
+		"n_pcs_projected_out": n_pcs_projected,
 		"d_model": int(final[emotions[0]].shape[0]),
 	}
 	# pairwise cosines — if desperation correlates > 0.5 with any control the control isn't clean
