@@ -1,0 +1,13 @@
+A vending machine dispenses items in exchange for payment without the intervention of a human operator. Although the specific mechanisms vary with the design of the machine, the basic operating sequence is common to most modern units.
+
+The machine consists of a cabinet containing the inventory, a payment interface on the front, a selection interface, a dispensing mechanism for each row of items, and a control board that coordinates these subsystems. The inventory is arranged in rows behind a transparent front panel, with each row corresponding to a specific product. The product code, often a letter and a number, is printed beside each row.
+
+The user begins by inserting payment. Older machines accept coins and paper currency through dedicated slots; modern machines also accept credit and debit cards through a small reader, and some accept payment from a mobile phone via a near-field communication terminal. Coins are sorted by a mechanical mechanism that distinguishes them by weight and size. Paper currency is drawn into a validator, which checks the bill against stored optical and magnetic patterns. The current balance is displayed on a small screen as the payment is accepted.
+
+Once the balance equals or exceeds the price of an available item, the user enters the product code on a keypad. The control board verifies that the chosen item is in stock and that the balance is sufficient. If both conditions are met, the board activates the dispensing mechanism for the appropriate row.
+
+The most common dispensing mechanism is the spring coil. A motor at the back of the row rotates a horizontal coil one full turn. The coil pushes the frontmost item forward until it falls into a dispensing bin at the bottom of the machine. The bin is accessible through a hinged flap on the front. The user lifts the flap and removes the item.
+
+If the balance exceeds the price of the chosen item, the difference is returned as change through a coin slot at the front of the machine, drawn from internal hoppers of stored coins. If the machine does not have enough small coins to make exact change, it typically refuses the original transaction and returns the inserted payment.
+
+Some machines include additional sensors that confirm the item actually fell. If the sensor detects no item falling, the machine refunds the user's balance and marks the row for restocking.

@@ -1,0 +1,13 @@
+A standard bicycle is composed of a frame supporting two wheels, a drivetrain, a steering assembly, brakes, and a seat. The relationship of these parts has remained largely consistent since the diamond frame became standard in the late nineteenth century.
+
+The frame is the structural backbone of the bicycle. A traditional diamond frame consists of two triangles: a front triangle formed by the top tube, down tube, head tube, and seat tube, and a rear triangle formed by the seat tube, seat stays, and chain stays. Frames are most commonly made of steel, aluminum, or carbon fiber, with titanium used for some higher-end builds.
+
+The wheels consist of a hub at the center, spokes radiating outward, and a rim around the circumference. A tire fits over the rim, and an inner tube within the tire holds compressed air. Most bicycles use rubber tires with treads varying from smooth slicks for road riding to deep knobs for off-road use.
+
+The drivetrain transfers force from the rider to the rear wheel. It consists of pedals attached to crank arms, which are joined to a chainring at the bottom bracket. A chain connects the chainring to a cassette or freewheel on the rear hub. When the rider pushes on the pedals, the chainring turns, the chain transfers the motion, and the rear wheel rotates. Most modern bicycles have multiple chainrings at the front and multiple cogs at the rear; a derailleur shifts the chain between them to vary the gear ratio.
+
+The steering assembly consists of the handlebars, stem, fork, and front wheel. The stem clamps onto the steerer tube of the fork and supports the handlebars. The fork rotates within the head tube on a set of bearings, allowing the front wheel to be steered.
+
+Brakes slow the wheels through friction. Rim brakes use calipers to press pads against the sides of the rim. Disc brakes use a rotor attached to the hub, against which pads in a caliper close when the brake lever is squeezed. Most modern bicycles intended for serious use have moved toward disc brakes.
+
+The seat consists of a saddle mounted on a seatpost that slides into the seat tube. The seatpost height can be adjusted to match the rider's leg length. Adjusting the seat to the correct height is generally considered the single most important fit measurement on the bicycle.

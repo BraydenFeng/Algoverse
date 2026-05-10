@@ -1,0 +1,11 @@
+Rain forms in clouds through a sequence of physical processes by which water vapor in the atmosphere condenses, collects, and eventually falls as liquid precipitation. The process depends on temperature, humidity, the presence of small airborne particles, and the dynamics of vertical air motion.
+
+The atmosphere always contains some amount of water vapor, evaporated from oceans, lakes, soils, and plants. The amount of vapor the air can hold depends strongly on temperature: warm air can hold more vapor than cold air. As a parcel of moist air rises, it expands against the lower pressure of the higher altitude and cools adiabatically. When the air cools enough that its water vapor reaches saturation, the vapor begins to condense.
+
+Condensation does not occur on its own at the temperatures and pressures found in most of the atmosphere. It requires nuclei: tiny solid or liquid particles on which water molecules can collect. These nuclei, called cloud condensation nuclei, include dust, sea salt, soot, and various microscopic biological particles. Each cloud droplet forms around such a nucleus and grows as additional water molecules condense onto it.
+
+A typical cloud droplet is only a few micrometers across, much too small to fall as rain. Air currents within the cloud easily keep droplets of this size suspended. For rain to form, droplets must grow much larger, to a diameter of about one millimeter or more.
+
+Two principal mechanisms accomplish this growth. In warm clouds, where temperatures remain above freezing throughout, droplets grow primarily by collision and coalescence: larger droplets fall faster than smaller ones and sweep up smaller droplets they encounter on the way down. In cold clouds, where part of the cloud is below freezing, the Bergeron-Findeisen process dominates: ice crystals grow at the expense of nearby supercooled liquid droplets because water vapor pressure is lower over ice than over liquid water at the same temperature. The ice crystals grow large enough to fall, and may melt into raindrops as they descend through warmer air.
+
+Once droplets reach a size at which their fall speed exceeds the upward air currents in the cloud, they fall toward the surface as rain. Smaller droplets may evaporate during the descent if the air below the cloud is dry; larger droplets reach the ground.

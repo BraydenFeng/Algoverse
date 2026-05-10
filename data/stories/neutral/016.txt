@@ -1,0 +1,13 @@
+A digital calculator performs addition through a sequence of operations that begins with the user pressing keys on the keypad and ends with a numerical result displayed on the screen. The underlying hardware translates each step into the manipulation of binary numbers in registers within an integrated circuit.
+
+When the user presses a digit key, a small switch beneath the key closes a contact. The keypad is wired as a matrix: rows and columns of conductors that allow the calculator's controller to identify which key has been pressed by scanning the matrix electrically. The controller stores the digit in a temporary register, typically as a four-bit binary-coded decimal value.
+
+If the user presses additional digit keys, each new digit is shifted into the register. The register represents the entered number as a sequence of binary-coded decimal digits, with each decimal digit encoded as four bits and stored in a position corresponding to its place value. Pressing keys in the order 4, 2, 7 leaves the value four hundred twenty-seven in the register.
+
+When the user presses the plus key, the controller transfers the current register value to a second register called the accumulator and clears the working register to accept the next number. The controller also records that the pending operation is addition.
+
+The user enters the second number, which is built up in the working register in the same way as the first.
+
+When the user presses the equals key, the controller performs the addition. In binary-coded decimal addition, the two numbers are added digit by digit from the rightmost position. For each pair of digits, the controller adds the four-bit values and produces a four-bit sum and a carry. Because each digit can range only from 0 to 9, sums of 10 or more require correction; the controller adds a fixed adjustment value to bring the sum back into the valid range and propagates the carry to the next position. This continues across all digit positions.
+
+The final sum, along with any final carry, is left in the accumulator. The controller then converts the accumulator value into the pattern of segments needed to display each digit on the screen. The display is a series of seven-segment indicators, each segment driven by a small transistor on the controller. The controller switches segments on and off in a fixed pattern so that the displayed digits match the binary-coded decimal value in the accumulator.

@@ -1,0 +1,11 @@
+A wristwatch is a small portable timekeeping device worn on the wrist by means of a strap or bracelet. Its components are arranged within a sealed case to keep dust and moisture out while presenting the time to the wearer through a transparent crystal on the front.
+
+The case is the outer housing, typically made of stainless steel, titanium, gold, or a polymer. It consists of a body that holds the movement and a back cover that screws or presses on to seal the case. The crystal at the front is most commonly made of mineral glass, sapphire crystal, or hardened acrylic; sapphire is the most scratch resistant. A bezel surrounds the crystal and is fixed or rotatable, depending on the design.
+
+The movement is the mechanism inside the case that measures time. Two principal types are in widespread use. A mechanical movement consists of a wound mainspring, a series of small gears called the gear train, an escapement, and a balance wheel. The mainspring stores energy and releases it gradually through the gear train; the escapement interrupts the gear train's motion at a precise interval set by the oscillation of the balance wheel. A self-winding mechanical movement adds a rotor that winds the mainspring as the wearer's arm moves. A quartz movement uses a small battery to drive a tuning fork of synthetic quartz, which vibrates at a precise frequency when an alternating voltage is applied. An integrated circuit divides the vibration count to produce a one-pulse-per-second signal that drives a small motor and the watch hands.
+
+The face of the watch carries the dial, an indication of the hour marks, and the hands. A standard analog watch has three hands: an hour hand, a minute hand, and a thin second hand. Many watches also include a small window showing the date, and some include additional dials for chronograph functions or a second time zone.
+
+The crown is the small knob on the side of the case used to set the time, and on mechanical watches to wind the mainspring. Pulling the crown to its outermost position disengages the gear train and allows the wearer to rotate the hands; pushing it back in re-engages the train.
+
+The strap is attached to the case by spring bars that fit into lugs at the top and bottom of the case. Straps are made of leather, fabric, rubber, or metal links and are sized to the wearer's wrist.
