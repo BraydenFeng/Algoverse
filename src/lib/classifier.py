@@ -60,20 +60,40 @@ def _refusal_regex() -> re.Pattern:
 
 
 def rule_classify(output_text: str, question: str) -> ClassifiedOutput:
-	"""Stage 1: rule-based pass. Returns 'ambiguous' for the judge if uncertain."""
+	"""Stage 1: rule-based pass. Returns 'ambiguous' for the judge if uncertain.
+
+	The rule fires "refuses" only when an abstention keyword is present AND the
+	whole output is short. This guards against the hedged-fabrication failure
+	mode (e.g. `unknown\\nLaw practice and philosophical poetry`), where the
+	model says "unknown" and then continues to fabricate a specific answer.
+	Surfaced by sanity-test diagnosis on 2026-05-11: judge disagreed with the
+	rule on this exact pattern, and the judge was right.
+	"""
 	if not output_text or not output_text.strip():
 		return ClassifiedOutput("off_topic", "rule", "empty output")
 
 	text = output_text.strip().lower()
+	n_words = len(text.split())
+	has_abstention = bool(_refusal_regex().search(text))
 
-	if _refusal_regex().search(text):
-		return ClassifiedOutput("refuses", "rule", "matched abstention phrasing")
+	# short output with abstention phrasing → confident refuses.
+	# threshold = 5 words: catches "unknown", "I don't know", "Not specified in passage";
+	# defers cases like the 6-word "unknown\\nLaw practice and philosophical poetry"
+	# (abstention keyword + fabricated continuation) to the judge.
+	if has_abstention and n_words <= 5:
+		return ClassifiedOutput("refuses", "rule", "short output with abstention phrasing")
 
-	# very short non-refusal answers are usually fabrications of a fact
-	if len(text.split()) <= 25:
+	# abstention keyword present but output is longer → ambiguous. Could be a clean
+	# refusal ("The context does not provide information about X") or a hedged
+	# fabrication ("unknown, but probably X"). Cost: one judge call per case.
+	if has_abstention:
+		return ClassifiedOutput("ambiguous", "rule", "abstention keyword present but output is long; defer to judge")
+
+	# no abstention keyword and short → almost certainly a one-shot fabricated fact.
+	if n_words <= 25:
 		return ClassifiedOutput("fabricates", "rule", "short non-refusal output")
 
-	# longer outputs without abstention phrasing: defer to judge
+	# long output, no abstention → defer to judge.
 	return ClassifiedOutput("ambiguous", "rule", "long output, no abstention match")
 
 
