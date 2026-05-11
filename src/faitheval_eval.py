@@ -77,6 +77,7 @@ def run_eval(
 	pre_forward_hook: Callable | None = None,
 	checkpoint_path: Path | None = None,
 	checkpoint_every: int = 100,
+	force_judge: bool = False,
 ) -> pd.DataFrame:
 	"""Run FaithEval-unanswerable through `model`.
 
@@ -87,6 +88,9 @@ def run_eval(
 			or ablation in M2.B/M2.C. None for baseline M0.0.
 		checkpoint_path: write incremental CSV here every checkpoint_every prompts.
 		checkpoint_every: checkpoint interval.
+		force_judge: skip the regex rule pass and send every output to the Claude
+			judge. Use for diagnosis when refusal_rate=1.0 or 0.0 looks suspicious
+			(see lib/classifier.classify docstring). Costs N judge calls.
 
 	Returns DataFrame indexed by qid with classification + raw output.
 	"""
@@ -121,7 +125,7 @@ def run_eval(
 			output = ""
 			print(f"[run_eval] generation failed for qid={qid}: {e}")
 
-		result = classify(output, row["question"], row["context"])
+		result = classify(output, row["question"], row["context"], force_judge=force_judge)
 		records.append(
 			EvalRecord(
 				qid=qid,

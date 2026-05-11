@@ -119,8 +119,22 @@ def judge_classify(output_text: str, question: str, context: str) -> ClassifiedO
 	return ClassifiedOutput("ambiguous", "judge", f"unparseable: {raw}")
 
 
-def classify(output_text: str, question: str, context: str) -> ClassifiedOutput:
-	"""Full two-stage pipeline."""
+def classify(
+	output_text: str,
+	question: str,
+	context: str,
+	*,
+	force_judge: bool = False,
+) -> ClassifiedOutput:
+	"""Full two-stage pipeline.
+
+	force_judge=True bypasses the rule pass entirely and sends every output
+	to the Claude judge. Use this when you suspect the regex is over-firing
+	and want a regex-independent label for diagnosis (or for the hand-label
+	calibration sample). Costs N judge calls per run instead of (N - n_rule_hits).
+	"""
+	if force_judge:
+		return judge_classify(output_text, question, context)
 	first = rule_classify(output_text, question)
 	if first.label != "ambiguous":
 		return first
