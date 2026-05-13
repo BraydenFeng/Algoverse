@@ -76,7 +76,7 @@ desperation-circuit/
 
 ## What artifacts live where
 
-- **Stories:** `data/stories/{emotion}/{idx:03d}.txt` locally; push to HF Hub `bray/desperation-circuit-artifacts/stories/` after M1
+- **Stories:** `data/stories/{emotion}/{idx:03d}.txt` locally; push to HF Hub `BraydenF/desperation-circuit-artifacts/stories/` after M1
 - **Vectors:** `outputs/m1_vectors/{emotion}.npy`; push to HF Hub `m1_vectors/`
 - **FaithEval results:** `outputs/m{N}/faitheval_*.csv`; push to HF Hub `m{N}_results/`
 - **Code:** git, single private GitHub repo (pending push)

@@ -75,7 +75,7 @@ mediation:
 paths:
   data_dir: "data"
   outputs_dir: "outputs"
-  hf_artifact_repo: "bray/desperation-circuit-artifacts"
+  hf_artifact_repo: "BraydenF/desperation-circuit-artifacts"
 
 secrets:
   hf_token_env: "HF_TOKEN"

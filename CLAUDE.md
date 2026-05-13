@@ -50,7 +50,7 @@ Algoverse research paper code repo. Brayden owns all Gemma-2-9B-IT modules; team
 - Local Windows + VS Code: edit code, write prereg notes, version control. Can't run Gemma-2-9B (~18GB VRAM in bf16).
 - Colab free T4: `sanity_test.ipynb` on Gemma-2-2B-IT smoke (~$0).
 - Colab Pro+ A100 / Vast.ai / Lambda: `m1_extract.ipynb` and downstream (Gemma-2-9B-IT).
-- HF Hub private dataset repo `bray/desperation-circuit-artifacts`: stories + vectors + CSVs. Don't commit these to git.
+- HF Hub private dataset repo `BraydenF/desperation-circuit-artifacts`: stories + vectors + CSVs. Don't commit these to git.
 
 ## Build incrementally
 
