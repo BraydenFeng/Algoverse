@@ -23,15 +23,27 @@ from .lib.config import load_config
 def load_emotion_vector(emotion: str) -> np.ndarray:
 	"""Load the M1-extracted emotion vector from outputs/m1_vectors/{emotion}.npy.
 
-	Raises FileNotFoundError with a clear M1-not-run message if the vector
-	hasn't been produced yet.
+	If the file is missing locally (e.g. M2+ running on a fresh Colab runtime
+	without re-running M1), pulls it from the HF Hub artifact repo before loading.
+	Raises FileNotFoundError only if both local and HF lookups fail.
 	"""
 	cfg = load_config()
 	vec_path = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors" / f"{emotion}.npy"
 	if not vec_path.exists():
-		raise FileNotFoundError(
-			f"emotion vector not found at {vec_path}; run M1 (notebooks/m1_extract.ipynb) first"
-		)
+		try:
+			from huggingface_hub import hf_hub_download
+
+			hf_hub_download(
+				repo_id=cfg["paths"]["hf_artifact_repo"],
+				repo_type="dataset",
+				filename=f"m1_vectors/{emotion}.npy",
+				local_dir=cfg["paths"]["outputs_dir"],
+			)
+		except Exception as e:
+			raise FileNotFoundError(
+				f"emotion vector not found at {vec_path} and HF fallback failed ({e}); "
+				f"run M1 first or verify HF_TOKEN has read access to {cfg['paths']['hf_artifact_repo']}"
+			) from e
 	v = np.load(vec_path)
 	# defensive: M1 already ℓ₂-normalizes, but re-normalize so steering is invariant
 	# to upstream changes
