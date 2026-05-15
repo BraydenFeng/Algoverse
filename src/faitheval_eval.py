@@ -69,6 +69,23 @@ def _greedy_generate(
 	return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 
+def _hf_sync_checkpoint(local_path: Path, repo_id: str, path_in_repo: str) -> None:
+	"""Upload a checkpoint CSV to HF Hub so it survives Colab session death."""
+	try:
+		from huggingface_hub import upload_file
+
+		upload_file(
+			path_or_fileobj=str(local_path),
+			path_in_repo=path_in_repo,
+			repo_id=repo_id,
+			repo_type="dataset",
+		)
+	except Exception as e:
+		# don't crash the eval loop over a transient HF upload failure;
+		# the local checkpoint is still on disk and will be retried next interval
+		print(f"[run_eval] HF sync to {repo_id}/{path_in_repo} failed: {e}")
+
+
 def run_eval(
 	model,
 	tokenizer,
@@ -77,6 +94,8 @@ def run_eval(
 	pre_forward_hook: Callable | None = None,
 	checkpoint_path: Path | None = None,
 	checkpoint_every: int = 100,
+	hf_sync_repo: str | None = None,
+	hf_sync_path: str | None = None,
 	force_judge: bool = False,
 ) -> pd.DataFrame:
 	"""Run FaithEval-unanswerable through `model`.
@@ -88,12 +107,19 @@ def run_eval(
 			or ablation in M2.B/M2.C. None for baseline M0.0.
 		checkpoint_path: write incremental CSV here every checkpoint_every prompts.
 		checkpoint_every: checkpoint interval.
+		hf_sync_repo: if set, also upload the checkpoint CSV to this HF dataset
+			repo after each local write. Lets M3 survive Colab session death.
+		hf_sync_path: path-in-repo for the HF copy (e.g. "m3_checkpoints/faitheval_baseline.csv").
+			Required if hf_sync_repo is set.
 		force_judge: skip the regex rule pass and send every output to the Claude
 			judge. Use for diagnosis when refusal_rate=1.0 or 0.0 looks suspicious
 			(see lib/classifier.classify docstring). Costs N judge calls.
 
 	Returns DataFrame indexed by qid with classification + raw output.
 	"""
+	if hf_sync_repo is not None and hf_sync_path is None:
+		raise ValueError("hf_sync_path is required when hf_sync_repo is set")
+
 	cfg = load_config()
 	ds = load_dataset(cfg["faitheval"]["hf_dataset"], split="test")
 	if limit is not None:
@@ -140,10 +166,14 @@ def run_eval(
 
 		if checkpoint_path is not None and (i + 1) % checkpoint_every == 0:
 			pd.DataFrame([asdict(r) for r in records]).to_csv(checkpoint_path, index=False)
+			if hf_sync_repo is not None:
+				_hf_sync_checkpoint(checkpoint_path, hf_sync_repo, hf_sync_path)
 
 	df = pd.DataFrame([asdict(r) for r in records])
 	if checkpoint_path is not None:
 		df.to_csv(checkpoint_path, index=False)
+		if hf_sync_repo is not None:
+			_hf_sync_checkpoint(checkpoint_path, hf_sync_repo, hf_sync_path)
 	return df
 
 
