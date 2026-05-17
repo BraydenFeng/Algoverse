@@ -63,16 +63,18 @@ def build_audit_sample(
 	m3_dir = Path(m3_dir)
 	full = _load_all_arms(m3_dir)
 
-	strata = full.groupby(["label", "arm"], group_keys=False)
-	per_cell = max(1, n // max(1, strata.ngroups))
-	sample = strata.apply(
-		lambda g: g.sample(min(per_cell, len(g)), random_state=seed),
-		include_groups=False,
-	).reset_index(drop=True)
+	groups = list(full.groupby(["label", "arm"]))
+	per_cell = max(1, n // max(1, len(groups)))
+	# iterate-and-concat preserves ALL columns including the groupby keys;
+	# groupby.apply(include_groups=False) silently drops label/arm — do not use it here
+	parts = [g.sample(min(per_cell, len(g)), random_state=seed) for _, g in groups]
+	sample = pd.concat(parts, ignore_index=True)
 
-	# top up to n if integer division left us short
+	# top up to n if integer division left us short (dedupe by qid+arm,
+	# not row index — concat above reset the index)
 	if len(sample) < n:
-		remaining = full.drop(index=sample.index, errors="ignore")
+		seen = set(zip(sample["qid"], sample["arm"]))
+		remaining = full[~full[["qid", "arm"]].apply(tuple, axis=1).isin(seen)]
 		if len(remaining):
 			sample = pd.concat(
 				[sample, remaining.sample(min(n - len(sample), len(remaining)), random_state=seed)],

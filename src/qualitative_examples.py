@@ -69,11 +69,13 @@ def label_flips(
 	flipped = merged[merged["label_base"] != merged["label_steered"]].copy()
 	flipped["transition"] = flipped["label_base"] + " -> " + flipped["label_steered"]
 
-	out = (
-		flipped.groupby("transition", group_keys=False)
-		.apply(lambda g: g.sample(min(per_transition, len(g)), random_state=seed), include_groups=False)
-		.reset_index(drop=True)
-	)
+	# iterate-and-concat: preserves the `transition` column (groupby.apply
+	# with include_groups=False would strip it, breaking to_markdown)
+	parts = [
+		g.sample(min(per_transition, len(g)), random_state=seed)
+		for _, g in flipped.groupby("transition")
+	]
+	out = pd.concat(parts, ignore_index=True) if parts else flipped.iloc[:0].copy()
 	out["context"] = out["context"].map(lambda s: _truncate(s, context_chars))
 	out["output_base"] = out["output_base"].map(lambda s: _truncate(s, 400))
 	out["output_steered"] = out["output_steered"].map(lambda s: _truncate(s, 400))
