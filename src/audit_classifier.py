@@ -51,6 +51,7 @@ def build_audit_sample(
 	*,
 	n: int = 100,
 	seed: int = 0,
+	judge_min: int = 0,
 	out_path: str | Path = "audit_sample.csv",
 ) -> Path:
 	"""Write a stratified ~n-row sample for blind hand-labelling.
@@ -59,6 +60,13 @@ def build_audit_sample(
 	arms are not swamped by the dominant baseline-refuses cell. The output CSV
 	deliberately puts `human_label` first and `classifier_label`/`method` last
 	so the labeller can hide the latter columns while working.
+
+	judge_min: guarantee at least this many method=="judge" rows in the sample.
+		The rule stage is near-tautological to hand-validate (a human applies
+		the same heuristic), so the load-bearing subset is the judge rows. The
+		default uniform sample only caught 3 judge rows in 100; set e.g.
+		judge_min=40 to force a judge-stratified audit that can actually bound
+		the arm-correlation of the judge's failure mode.
 	"""
 	m3_dir = Path(m3_dir)
 	full = _load_all_arms(m3_dir)
@@ -69,6 +77,24 @@ def build_audit_sample(
 	# groupby.apply(include_groups=False) silently drops label/arm — do not use it here
 	parts = [g.sample(min(per_cell, len(g)), random_state=seed) for _, g in groups]
 	sample = pd.concat(parts, ignore_index=True)
+
+	# force judge-method coverage: the rule subset is tautological to audit;
+	# the judge subset is where independent human judgement actually tests the
+	# classifier, and a uniform sample barely hits it
+	if judge_min > 0:
+		have = (sample["method"] == "judge").sum() if "method" in sample.columns else 0
+		if have < judge_min:
+			seen = set(zip(sample["qid"], sample["arm"]))
+			judge_pool = full[
+				(full["method"] == "judge")
+				& ~full[["qid", "arm"]].apply(tuple, axis=1).isin(seen)
+			]
+			take = min(judge_min - have, len(judge_pool))
+			if take > 0:
+				sample = pd.concat(
+					[sample, judge_pool.sample(take, random_state=seed)],
+					ignore_index=True,
+				)
 
 	# top up to n if integer division left us short (dedupe by qid+arm,
 	# not row index — concat above reset the index)
@@ -122,11 +148,33 @@ def score_audit(filled_path: str | Path) -> dict:
 		labelled.groupby(["classifier_label", "human_label"]).size().unstack(fill_value=0)
 	)
 
+	# judge-subset agreement broken down by arm — this is the load-bearing
+	# diagnostic: if the judge's failure rate is arm-correlated, the M3
+	# fabricate/refuse DELTAS (not just absolute levels) are biased
+	judge = labelled[labelled["classifier_method"] == "judge"]
+	judge_by_arm = (
+		judge.groupby("arm")["agree"].agg(["mean", "count"]).to_dict("index")
+		if len(judge) else {}
+	)
+
 	print(f"[audit] labelled {len(labelled)} rows ({n_missing} unlabelled/skipped)")
 	print(f"[audit] overall agreement: {overall:.3f}  (floor {_AGREEMENT_FLOOR})")
+	print("[audit] NOTE: overall is inflated by the tautological rule subset; the")
+	print("[audit]       judge subset below is the number that actually validates.")
 	print("[audit] agreement by classifier method:")
 	for method, stats in by_method.items():
 		print(f"          {method:6s}  {stats['mean']:.3f}  (n={int(stats['count'])})")
+	print(f"[audit] judge-subset agreement by arm (n_judge={len(judge)}):")
+	if judge_by_arm:
+		for arm, stats in sorted(judge_by_arm.items()):
+			print(f"          {arm:14s}  {stats['mean']:.3f}  (n={int(stats['count'])})")
+		spread = max(s["mean"] for s in judge_by_arm.values()) - min(
+			s["mean"] for s in judge_by_arm.values()
+		)
+		print(f"          arm spread = {spread:.3f}  (large spread => judge error is "
+		      f"arm-correlated => M3 deltas biased, not just offset)")
+	else:
+		print("          (no judge rows in sample — re-run build_audit_sample with judge_min)")
 	print("[audit] confusion (rows=classifier, cols=human):")
 	print(confusion.to_string())
 
@@ -144,6 +192,8 @@ def score_audit(filled_path: str | Path) -> dict:
 		"n_labelled": len(labelled),
 		"n_missing": n_missing,
 		"by_method": by_method,
+		"judge_by_arm": judge_by_arm,
+		"n_judge": len(judge),
 		"confusion": confusion.to_dict(),
 		"below_floor": overall < _AGREEMENT_FLOOR,
 	}
