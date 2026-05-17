@@ -71,6 +71,10 @@ desperation-circuit/
 2. **Repo sharing model with teammates** — Brayden's call; pending coordination with Akshat. Default: private GitHub, single shared repo, Llama on separate branch.
 3. **Will Opus 4.7 stories be emotionally unambiguous by token 50?** Cell 4 of `sanity_test.ipynb` spot-checks two stories before paying for A100 extraction.
 
+## M3 classifier validation (limitation — locked 2026-05-17)
+
+100-item stratified hand-audit: 97% raw human–classifier agreement, but dominated by the tautological rule subset. Judge subset (~2% of items) too sparse (n=3) for a reliable estimate and shows the judge returning unparseable verdicts on hedged "context states X but not Y" outputs. **Decision (human-owned): report the directional M3 result with confidence (refusal suppressed, redistributed to off-topic, 4–10σ); treat precise fabricate/refuse magnitudes as classifier-limited; no classifier change, no judge-model swap.** Writeup limitation paragraph drafted (see session recap 2026-05-17). Judge-stratified re-audit deferred to future work — does not affect the qualitative finding.
+
 ## Decisions log
 
 - **2026-05-10:** Scoped to v2 LaTeX. Stripped v5.2 over-build (m0_viability, prereg, Gemma-3, β-decomp, ROME control).
