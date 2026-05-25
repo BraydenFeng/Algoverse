@@ -36,6 +36,7 @@ desperation-circuit/
 │   ├── faitheval_eval.py      # FaithEval dose-response driver (used by M0/M3)
 │   ├── generate_stories.py    # Opus 4.7 story generator (used by M1)
 │   ├── extract_vectors.py     # M1 extraction pipeline
+│   ├── m3_retention.py        # M3 conditional/unconditional rate table (PI ask 2026-05-25)
 │   └── lib/
 │       ├── config.py          # config.yaml loader w/ env overrides
 │       ├── model_load.py      # Gemma-2-9B-IT + 2B-IT loaders + chat template helper
@@ -87,4 +88,5 @@ desperation-circuit/
 - **Stories:** `data/stories/{emotion}/{idx:03d}.txt` locally; push to HF Hub `BraydenF/desperation-circuit-artifacts/stories/` after M1
 - **Vectors:** `outputs/m1_vectors/{emotion}.npy`; push to HF Hub `m1_vectors/`
 - **FaithEval results:** `outputs/m{N}/faitheval_*.csv`; push to HF Hub `m{N}_results/`
+- **M3 retention table:** `outputs/m3/retention_table.csv`; push to HF Hub `m3/retention_table.csv`. Per-arm conditional (on non-empty / strict-retained outputs) and unconditional (over all 2,492) refuse/fab rates with α-regime labels (≤ 0.3 interpretable, ≥ 0.5 overshoot). Built by Cell 12.
 - **Code:** git, single private GitHub repo (pending push)
