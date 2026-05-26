@@ -23,3 +23,15 @@ def load_config() -> dict:
 		"DC_OUTPUTS_DIR", str(REPO_ROOT / cfg["paths"]["outputs_dir"])
 	)
 	return cfg
+
+
+def layer_suffix(cfg: dict | None = None) -> str:
+	"""Per-layer subdirectory token, e.g. "L21".
+
+	Used to namespace M1/M2/M3 outputs and HF-Hub paths so the same repo can
+	hold artifacts from multiple extraction-layer runs without overwriting.
+	Always reads the primary model's extraction_layer — both the steering
+	vector and the SAE mediator must live at the same layer in v2 scope.
+	"""
+	cfg = cfg if cfg is not None else load_config()
+	return f"L{cfg['models']['primary']['extraction_layer']}"

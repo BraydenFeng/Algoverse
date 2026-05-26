@@ -21,7 +21,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .lib.config import load_config
+from .lib.config import layer_suffix, load_config
 
 
 @dataclass
@@ -121,7 +121,8 @@ def extract_all(model, tokenizer) -> dict[str, ExtractionResult]:
 	var_explained = cfg["extraction"]["pc_project_out_variance"]
 	do_l2 = cfg["extraction"]["l2_normalize"]
 	data_dir = Path(cfg["paths"]["data_dir"])
-	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors"
+	# layer-suffixed dir so re-runs at different extraction layers don't stomp each other
+	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors" / layer_suffix(cfg)
 	out_dir.mkdir(parents=True, exist_ok=True)
 
 	# 1. capture per-story means for each emotion

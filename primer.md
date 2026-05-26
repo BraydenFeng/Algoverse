@@ -51,8 +51,9 @@ desperation-circuit/
 
 ## Configuration locked
 
-- **Primary model:** `google/gemma-2-9b-it`, bf16, 42 layers, extract at layer 28 (~2/3 depth)
-- **SAE (for M4):** `gemma-scope-9b-it-res`, layer 28, width 16k, l0 ~75. Unknown-entity feature index from Ferrando v2 Appendix Q — **TBD, blocks M4**
+- **Primary model:** `google/gemma-2-9b-it`, bf16, 42 layers, extract at layer 21 (Ferrando v2 Figure 9 peak for unknown-entity latent; was layer 28 pre-2026-05-25 layer move)
+- **SAE (for M4):** `google/gemma-scope-9b-pt-res`, layer 21, width 16k, l0 ~75. PT (base-model) SAE per Ferrando §4 — entity-recognition latents are derived on PT, then steered into IT. Unknown-entity feature index not published in Appendix Q — will be re-derived via the separation-score recipe in M4. **TBD, blocks M4.**
+- **Layer-suffixed artifact paths:** all M1/M2/M3 outputs now live under `outputs/{m1_vectors,m2,m3}/L{layer}/…`; HF Hub mirrors the same structure. Layer-28 artifacts from the original v2 run are preserved under `L28/` for comparison.
 - **Emotions:** desperation, calm, sad, angry (LaTeX §3 paragraph 1 still says "loving, nostalgic" — stale)
 - **Stories:** 20 per emotion, ~400 words, Claude Opus 4.7 generator, 20 narrative contexts (stratified)
 - **Token skip:** 50 (Anthropic protocol)
@@ -64,11 +65,11 @@ desperation-circuit/
 
 ## Open questions
 
-1. **M4 SAE setup needs revisiting before M4 starts.** From Ferrando v2 (arXiv:2411.14257) + their code repo (github.com/javiferran/sae_entities):
-   - **SAE release in `config.yaml:19` is wrong.** Entity-recognition latents are computed on the base model (paper §4), then steered into the IT model. Switch `release` from `gemma-scope-9b-it-res` to `google/gemma-scope-9b-pt-res`. Width `16k` is correct.
-   - **Layer choice (`config.yaml:20`) is probably wrong.** Ferrando's Figure 9 (Gemma-2-9B) shows separation-score peak in middle layers (~18–25) then plateau. Current `layer: 28` is past peak. Base-model SAEs exist on every layer (unlike IT, which is limited to 10/21/32), so layer is flexible — likely 21 is the right call to match Ferrando.
-   - **Feature index is not published.** Paper doesn't list indices; repo computes them dynamically via `mech_interp/feature_analysis.py` → JSON outputs not committed. Three paths to resolve, in order of preference: (a) **email Javier Ferrando** at jferrandomonsonis@gmail.com asking for the `train_latents_layers_*` JSON outputs for Gemma-2-9B — 5-min ask, possible same-day reply, zero compute; (b) run their pipeline ourselves (~half-day A100); (c) re-derive in our own M4 code.
-   - Not blocking M1/M2/M3.
+1. **M4 SAE setup (partially resolved 2026-05-25).**
+   - **SAE release locked:** `google/gemma-scope-9b-pt-res` (base model; entity-recognition latents transfer to IT per Ferrando §4). Was `gemma-scope-9b-it-res`.
+   - **Layer locked:** 21. Brayden verified the Ferrando v2 Figure 9 peak directly. Same layer is now used for M1 extraction + M2 steering + M3 FaithEval + M4 mediation.
+   - **Feature index still TBD.** Email-Ferrando route dropped (2026-05-25 Brayden); will be re-derived in M4 via the Section 4 separation-score recipe on Gemma-2-9B PT. This is the only remaining blocker for M4 to start.
+   - **Triggers full M1→M2→M3 re-run at L21.** Existing L28 artifacts preserved under `outputs/{m1_vectors,m2,m3}/L28/` for comparison; L21 re-runs land in sibling `L21/` directories without overwriting.
 2. **Repo sharing model with teammates** — Brayden's call; pending coordination with Akshat. Default: private GitHub, single shared repo, Llama on separate branch.
 3. **Will Opus 4.7 stories be emotionally unambiguous by token 50?** Cell 4 of `sanity_test.ipynb` spot-checks two stories before paying for A100 extraction.
 
