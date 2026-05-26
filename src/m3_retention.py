@@ -125,25 +125,44 @@ def compute_arm_rates(df: pd.DataFrame, arm: str, alpha: float | None) -> ArmRat
 def build_retention_table(
 	csv_dir: Path,
 	steered_alphas: list[float] = STEERED_ALPHAS,
+	min_n_total: int = 2000,
 ) -> pd.DataFrame:
 	"""Scan csv_dir for baseline / steered / ablated CSVs and build the table.
 
 	Missing arms are silently skipped — the table reports whatever ran.
+	Arms with n_total < min_n_total are skipped with a stderr note so partial
+	runs (Colab session death mid-arm) don't get mixed in with completed ones
+	at non-comparable denominators. Default 2000 leaves headroom under the
+	full 2,492 FaithEval prompts.
 	"""
+	import sys
+
 	rows: list[ArmRates] = []
+
+	def _maybe_append(df: pd.DataFrame, arm: str, alpha: float | None) -> None:
+		r = compute_arm_rates(df, arm, alpha)
+		if r.n_total < min_n_total:
+			label = f"{arm} α={alpha}" if alpha is not None else arm
+			print(
+				f"[m3_retention] skipping {label}: n_total={r.n_total} < {min_n_total} "
+				"(partial run; complete the arm before including it)",
+				file=sys.stderr,
+			)
+			return
+		rows.append(r)
 
 	baseline_path = csv_dir / "faitheval_baseline.csv"
 	if baseline_path.exists():
-		rows.append(compute_arm_rates(pd.read_csv(baseline_path), "baseline", None))
+		_maybe_append(pd.read_csv(baseline_path), "baseline", None)
 
 	for alpha in steered_alphas:
 		path = csv_dir / f"faitheval_steered_a{alpha}.csv"
 		if path.exists():
-			rows.append(compute_arm_rates(pd.read_csv(path), "steered", alpha))
+			_maybe_append(pd.read_csv(path), "steered", alpha)
 
 	ablated_path = csv_dir / "faitheval_ablated.csv"
 	if ablated_path.exists():
-		rows.append(compute_arm_rates(pd.read_csv(ablated_path), "ablated", None))
+		_maybe_append(pd.read_csv(ablated_path), "ablated", None)
 
 	return pd.DataFrame([r.__dict__ for r in rows])
 
