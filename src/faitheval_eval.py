@@ -93,7 +93,7 @@ def run_eval(
 	limit: int | None = None,
 	pre_forward_hook: Callable | None = None,
 	checkpoint_path: Path | None = None,
-	checkpoint_every: int = 100,
+	checkpoint_every: int = 500,
 	hf_sync_repo: str | None = None,
 	hf_sync_path: str | None = None,
 	force_judge: bool = False,
