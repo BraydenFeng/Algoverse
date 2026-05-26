@@ -18,7 +18,7 @@ Live state of the codebase. Update after material changes.
 | 1 | Emotion vector extraction | ✅ | ⬜ | — |
 | 2 | Steering + MMLU | ⬜ | ⬜ | — |
 | 3 | FaithEval + orthogonal-projection ablation | ⬜ | ⬜ | — |
-| 4 | Imai 2010 mediation | ⬜ | ⬜ | — |
+| 4 | Imai 2010 mediation | ✅ | ⬜ | — |
 
 ## File layout
 
@@ -37,6 +37,9 @@ desperation-circuit/
 │   ├── generate_stories.py    # Opus 4.7 story generator (used by M1)
 │   ├── extract_vectors.py     # M1 extraction pipeline
 │   ├── m3_retention.py        # M3 conditional/unconditional rate table (PI ask 2026-05-25)
+│   ├── m4_entity_dataset.py   # M4 hand-curated entity prompts (known/unknown × 4 types)
+│   ├── m4_feature_derivation.py  # M4 separation-score recipe → unknown-entity latent index
+│   ├── m4_mediation.py        # M4 Imai estimator + SAE clamp/capture hooks
 │   └── lib/
 │       ├── config.py          # config.yaml loader w/ env overrides
 │       ├── model_load.py      # Gemma-2-9B-IT + 2B-IT loaders + chat template helper
@@ -65,11 +68,11 @@ desperation-circuit/
 
 ## Open questions
 
-1. **M4 SAE setup (partially resolved 2026-05-25).**
-   - **SAE release locked:** `google/gemma-scope-9b-pt-res` (base model; entity-recognition latents transfer to IT per Ferrando §4). Was `gemma-scope-9b-it-res`.
-   - **Layer locked:** 21. Brayden verified the Ferrando v2 Figure 9 peak directly. Same layer is now used for M1 extraction + M2 steering + M3 FaithEval + M4 mediation.
-   - **Feature index still TBD.** Email-Ferrando route dropped (2026-05-25 Brayden); will be re-derived in M4 via the Section 4 separation-score recipe on Gemma-2-9B PT. This is the only remaining blocker for M4 to start.
-   - **Triggers full M1→M2→M3 re-run at L21.** Existing L28 artifacts preserved under `outputs/{m1_vectors,m2,m3}/L28/` for comparison; L21 re-runs land in sibling `L21/` directories without overwriting.
+1. **M4 SAE setup (resolved 2026-05-25, M4 scaffolded 2026-05-26).**
+   - **SAE release locked:** `google/gemma-scope-9b-pt-res` (base model; entity-recognition latents transfer to IT per Ferrando §4).
+   - **Layer locked:** 21. Same layer is used for M1 extraction + M2 steering + M3 FaithEval + M4 mediation.
+   - **Feature index will be re-derived in M4 Cell 3.** Hand-curated entity dataset (30 known + 30 unknown per type × 4 types = 240 prompts) implements Ferrando §4 recipe; output JSON cached at `outputs/m4/L{layer}/unknown_entity_latents.json`. If separation score < 0.4 on first run, fall back to running Ferrando's full Wikidata pipeline (~half-day A100 extra).
+   - **M4 scaffolding:** `src/m4_entity_dataset.py`, `src/m4_feature_derivation.py`, `src/m4_mediation.py`, `notebooks/m4_mediation.ipynb`. Four arms (baseline+capture, steered+capture, rescue, reverse). Headline α=0.3 (M3 L21 crossover). Cost ~90 min A100, ~$5-7 on Vast spot.
 2. **Repo sharing model with teammates** — Brayden's call; pending coordination with Akshat. Default: private GitHub, single shared repo, Llama on separate branch.
 3. **Will Opus 4.7 stories be emotionally unambiguous by token 50?** Cell 4 of `sanity_test.ipynb` spot-checks two stories before paying for A100 extraction.
 
@@ -90,4 +93,5 @@ desperation-circuit/
 - **Vectors:** `outputs/m1_vectors/{emotion}.npy`; push to HF Hub `m1_vectors/`
 - **FaithEval results:** `outputs/m{N}/faitheval_*.csv`; push to HF Hub `m{N}_results/`
 - **M3 retention table:** `outputs/m3/retention_table.csv`; push to HF Hub `m3/retention_table.csv`. Per-arm conditional (on non-empty / strict-retained outputs) and unconditional (over all 2,492) refuse/fab rates with α-regime labels (≤ 0.3 interpretable, ≥ 0.5 overshoot). Built by Cell 12.
+- **M4 mediation artifacts:** `outputs/m4/L{layer}/unknown_entity_latents.json` (top-N unknown-entity SAE latents from Ferrando §4 recipe), `outputs/m4/L{layer}/arm_{A,B,C,D}.csv` (per-prompt outputs + mediator values per arm), `outputs/m4/L{layer}/decision.txt` (Imai TE/ACME/ADE decomposition). Mirrored to HF Hub under `m4/L{layer}/`.
 - **Code:** git, single private GitHub repo (pending push)
