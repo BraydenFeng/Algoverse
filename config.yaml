@@ -13,6 +13,15 @@ models:
     hf_id: "google/gemma-2-2b-it"  # smoke-test only; fits on T4 in bf16
     dtype: "bfloat16"
     uses_chat_template: true
+  llama:
+    # v2 Llama parallel track (Brayden-owned as of 2026-05-29 module-reassignment)
+    hf_id: "meta-llama/Llama-3.1-8B-Instruct"
+    dtype: "bfloat16"
+    n_layers: 32
+    # ~2/3 depth on a 32-layer net = 21. No published Ferrando-equivalent peak for Llama;
+    # this is a working default and may need empirical re-tuning in M1 if cosines look noisy.
+    extraction_layer: 21
+    uses_chat_template: true
 
 sae:
   # Gemma Scope (original; not Scope 2). Ferrando v2 §4 derives entity-recognition latents

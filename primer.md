@@ -15,10 +15,13 @@ Live state of the codebase. Update after material changes.
 | # | Module | Code | Run | Output |
 |---|--------|------|-----|--------|
 | Sanity | Gemma-2-2B-IT pipeline smoke | ✅ | ⬜ | — |
-| 1 | Emotion vector extraction | ✅ | ⬜ | — |
-| 2 | Steering + MMLU | ⬜ | ⬜ | — |
-| 3 | FaithEval + orthogonal-projection ablation | ⬜ | ⬜ | — |
-| 4 | Imai 2010 mediation | ✅ | ⬜ | — |
+| 1 | Emotion vector extraction (Gemma) | ✅ | ⬜ | — |
+| 2 | Steering + MMLU (Gemma) | ⬜ | ⬜ | — |
+| 3 | FaithEval + orthogonal-projection ablation (Gemma) | ⬜ | ⬜ | — |
+| 4 | Imai 2010 mediation (Gemma — teammate-owned 2026-05-29) | ✅ | ⬜ | — |
+| 1L | Emotion vector extraction (Llama-3.1-8B-Instruct) | ✅ | ⬜ | — |
+| 2L | Steering + MMLU (Llama) | ✅ | ⬜ | — |
+| 3L | FaithEval + orthogonal-projection ablation (Llama) | ✅ | ⬜ | — |
 
 ## File layout
 
@@ -46,8 +49,14 @@ desperation-circuit/
 │       ├── sae_load.py        # Gemma Scope (original) loader; M4 only
 │       └── classifier.py      # refuses/fabricates/off_topic; rule + Claude judge
 ├── notebooks/
-│   ├── sanity_test.ipynb      # Gemma-2-2B-IT smoke before paying for A100 hours
-│   └── m1_extract.ipynb       # M1 orchestrator
+│   ├── sanity_test.ipynb               # Gemma-2-2B-IT smoke before paying for A100 hours
+│   ├── m1_extract.ipynb                # M1 Gemma
+│   ├── m2_steer_mmlu.ipynb             # M2 Gemma
+│   ├── m3_faitheval.ipynb              # M3 Gemma
+│   ├── m4_mediation.ipynb              # M4 Gemma (teammate-owned 2026-05-29)
+│   ├── m1_extract_llama.ipynb          # M1 Llama-3.1-8B-Instruct parallel track
+│   ├── m2_steer_mmlu_llama.ipynb       # M2 Llama
+│   └── m3_faitheval_llama.ipynb        # M3 Llama (core protocol, no diagnostic add-ons)
 ├── data/                      # stories live here once generated; gitignored
 └── outputs/                   # vectors + CSVs land here; gitignored
 ```
@@ -57,6 +66,7 @@ desperation-circuit/
 - **Primary model:** `google/gemma-2-9b-it`, bf16, 42 layers, extract at layer 21 (Ferrando v2 Figure 9 peak for unknown-entity latent; was layer 28 pre-2026-05-25 layer move)
 - **SAE (for M4):** `google/gemma-scope-9b-pt-res`, layer 21, width 16k, l0 ~75. PT (base-model) SAE per Ferrando §4 — entity-recognition latents are derived on PT, then steered into IT. Unknown-entity feature index not published in Appendix Q — will be re-derived via the separation-score recipe in M4. **TBD, blocks M4.**
 - **Layer-suffixed artifact paths:** all M1/M2/M3 outputs now live under `outputs/{m1_vectors,m2,m3}/L{layer}/…`; HF Hub mirrors the same structure. Layer-28 artifacts from the original v2 run are preserved under `L28/` for comparison.
+- **Llama parallel track:** Llama-3.1-8B-Instruct config under `models.llama` (extraction_layer=21 — ~2/3 depth, working default). `load_llama()` in `src/lib/model_load.py`. `layer_suffix(cfg, "llama")` returns `llama_L21` so Llama outputs land in their own subdir (`outputs/{m1_vectors,m2,m3}/llama_L21/…` and HF Hub `m{N}_*/llama_L21/`) without colliding with Gemma artifacts. `extract_all(..., model_key="llama")` and `load_emotion_vector(emotion, model_key="llama")` route to the Llama namespace; the rest of the pipeline (`mmlu_eval`, `faitheval_eval`, hook factories) is model-agnostic and unchanged.
 - **Emotions:** desperation, calm, sad, angry (LaTeX §3 paragraph 1 still says "loving, nostalgic" — stale)
 - **Stories:** 20 per emotion, ~400 words, Claude Opus 4.7 generator, 20 narrative contexts (stratified)
 - **Token skip:** 50 (Anthropic protocol)
@@ -86,6 +96,7 @@ desperation-circuit/
 - **2026-05-10:** 4 emotions resolved as desperation + calm + sad + angry (control-emotion question, deferred since 2026-05-03).
 - **2026-05-10:** Story count is Brayden's knob, not locked at LaTeX's 20.
 - **2026-05-10:** Qwen probably deferred to v5 (Brayden flag); v2 LaTeX still lists three models but execution targets Gemma + Llama only.
+- **2026-05-29:** Module reassignment. Brayden out of heavy compute → M4 (Gemma Imai mediation) handed to teammate; Llama-3.1-8B-Instruct M1–M3 (full parity, including orthogonal-projection ablation) taken on by Brayden. Llama notebooks added; CLAUDE.md ownership lines ("Llama = teammates") superseded for the M1–M3 scope.
 
 ## What artifacts live where
 

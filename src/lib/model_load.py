@@ -1,4 +1,4 @@
-"""Gemma model loading. Gated on HF; expects HF_TOKEN in env."""
+"""HF model loading for the Gemma and Llama tracks. Both are gated; expects HF_TOKEN in env."""
 
 from typing import Literal
 
@@ -15,15 +15,9 @@ _DTYPE_MAP = {
 }
 
 
-def load_gemma(variant: Literal["primary", "sanity"] = "primary"):
-	"""Return (model, tokenizer) for the requested config variant.
-
-	variant:
-		"primary" -> Gemma-2-9B-IT (v2 target)
-		"sanity"  -> Gemma-2-2B-IT (smoke test on T4)
-	"""
+def _load_model_by_key(model_key: str):
 	cfg = load_config()
-	model_cfg = cfg["models"][variant]
+	model_cfg = cfg["models"][model_key]
 	hf_id = model_cfg["hf_id"]
 	dtype = _DTYPE_MAP[model_cfg["dtype"]]
 
@@ -43,8 +37,27 @@ def load_gemma(variant: Literal["primary", "sanity"] = "primary"):
 	return model, tokenizer
 
 
+def load_gemma(variant: Literal["primary", "sanity"] = "primary"):
+	"""Return (model, tokenizer) for the requested Gemma config variant.
+
+	variant:
+		"primary" -> Gemma-2-9B-IT (v2 target)
+		"sanity"  -> Gemma-2-2B-IT (smoke test on T4)
+	"""
+	return _load_model_by_key(variant)
+
+
+def load_llama():
+	"""Return (model, tokenizer) for the Llama parallel track (Llama-3.1-8B-Instruct).
+
+	Reads the "llama" key from config.yaml. Brayden-owned as of the 2026-05-29
+	module reassignment (M4 → teammate, Llama M1-M3 → Brayden).
+	"""
+	return _load_model_by_key("llama")
+
+
 def apply_chat_template(tokenizer, user_text: str) -> str:
-	"""Wrap a user message in Gemma's chat template. v2 uses IT models, so chat formatting matters."""
+	"""Wrap a user message in the model's chat template. v2 uses IT models, so chat formatting matters."""
 	messages = [{"role": "user", "content": user_text}]
 	return tokenizer.apply_chat_template(
 		messages, tokenize=False, add_generation_prompt=True

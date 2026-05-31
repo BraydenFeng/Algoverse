@@ -112,17 +112,23 @@ def _compute_projection_matrix(neutral_vecs: np.ndarray, target_var_explained: f
 	return np.eye(d) - P_top
 
 
-def extract_all(model, tokenizer) -> dict[str, ExtractionResult]:
-	"""Run full v2 extraction protocol; return per-emotion vectors."""
+def extract_all(model, tokenizer, model_key: str = "primary") -> dict[str, ExtractionResult]:
+	"""Run full v2 extraction protocol; return per-emotion vectors.
+
+	model_key selects which config block under `models:` to read extraction_layer
+	from. "primary" -> Gemma (existing paths preserved); "llama" -> Llama-3.1-8B-Instruct
+	parallel track, outputs land in a separate `llama_L{layer}` subdir.
+	"""
 	cfg = load_config()
 	emotions = cfg["extraction"]["emotions"]
-	layer = cfg["models"]["primary"]["extraction_layer"]
+	layer = cfg["models"][model_key]["extraction_layer"]
 	token_skip = cfg["extraction"]["token_skip"]
 	var_explained = cfg["extraction"]["pc_project_out_variance"]
 	do_l2 = cfg["extraction"]["l2_normalize"]
 	data_dir = Path(cfg["paths"]["data_dir"])
-	# layer-suffixed dir so re-runs at different extraction layers don't stomp each other
-	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors" / layer_suffix(cfg)
+	# layer-suffixed dir so re-runs at different extraction layers (and different
+	# models, via model_key) don't stomp each other
+	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors" / layer_suffix(cfg, model_key)
 	out_dir.mkdir(parents=True, exist_ok=True)
 
 	# 1. capture per-story means for each emotion
@@ -184,6 +190,8 @@ def extract_all(model, tokenizer) -> dict[str, ExtractionResult]:
 
 	# log + cosine sanity check
 	log = {
+		"model_key": model_key,
+		"hf_id": cfg["models"][model_key]["hf_id"],
 		"layer": layer,
 		"token_skip": token_skip,
 		"pc_project_out_variance": var_explained,

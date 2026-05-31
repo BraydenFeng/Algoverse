@@ -20,15 +20,18 @@ from tqdm import tqdm
 from .lib.config import layer_suffix, load_config
 
 
-def load_emotion_vector(emotion: str) -> np.ndarray:
-	"""Load the M1-extracted emotion vector from outputs/m1_vectors/{emotion}.npy.
+def load_emotion_vector(emotion: str, model_key: str = "primary") -> np.ndarray:
+	"""Load the M1-extracted emotion vector from outputs/m1_vectors/{lsuf}/{emotion}.npy.
+
+	model_key selects which model's vectors to load. "primary" -> Gemma (legacy
+	`L{layer}` subdir); "llama" -> Llama parallel track (`llama_L{layer}` subdir).
 
 	If the file is missing locally (e.g. M2+ running on a fresh Colab runtime
 	without re-running M1), pulls it from the HF Hub artifact repo before loading.
 	Raises FileNotFoundError only if both local and HF lookups fail.
 	"""
 	cfg = load_config()
-	lsuf = layer_suffix(cfg)
+	lsuf = layer_suffix(cfg, model_key)
 	vec_path = Path(cfg["paths"]["outputs_dir"]) / "m1_vectors" / lsuf / f"{emotion}.npy"
 	if not vec_path.exists():
 		try:
@@ -43,7 +46,7 @@ def load_emotion_vector(emotion: str) -> np.ndarray:
 		except Exception as e:
 			raise FileNotFoundError(
 				f"emotion vector not found at {vec_path} and HF fallback failed ({e}); "
-				f"run M1 at extraction_layer={cfg['models']['primary']['extraction_layer']} "
+				f"run M1 (model_key={model_key!r}) at extraction_layer={cfg['models'][model_key]['extraction_layer']} "
 				f"or verify HF_TOKEN has read access to {cfg['paths']['hf_artifact_repo']}"
 			) from e
 	v = np.load(vec_path)

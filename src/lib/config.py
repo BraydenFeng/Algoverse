@@ -25,13 +25,21 @@ def load_config() -> dict:
 	return cfg
 
 
-def layer_suffix(cfg: dict | None = None) -> str:
-	"""Per-layer subdirectory token, e.g. "L21".
+def layer_suffix(cfg: dict | None = None, model_key: str = "primary") -> str:
+	"""Per-layer subdirectory token.
+
+	"primary" (Gemma)  -> "L21"          (backward-compat with all existing artifacts)
+	"llama"            -> "llama_L21"    (Llama parallel track, isolated namespace)
 
 	Used to namespace M1/M2/M3 outputs and HF-Hub paths so the same repo can
-	hold artifacts from multiple extraction-layer runs without overwriting.
-	Always reads the primary model's extraction_layer — both the steering
-	vector and the SAE mediator must live at the same layer in v2 scope.
+	hold artifacts from multiple extraction-layer runs and multiple models
+	without overwriting. Both the steering vector and (Gemma-only) SAE mediator
+	must live at the same layer for a given model_key in v2 scope.
 	"""
 	cfg = cfg if cfg is not None else load_config()
-	return f"L{cfg['models']['primary']['extraction_layer']}"
+	layer = cfg["models"][model_key]["extraction_layer"]
+	# preserve the pre-existing path scheme for "primary" so Gemma artifacts on
+	# disk and on HF Hub don't need to be migrated
+	if model_key == "primary":
+		return f"L{layer}"
+	return f"{model_key}_L{layer}"
