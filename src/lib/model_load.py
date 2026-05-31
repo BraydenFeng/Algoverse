@@ -1,5 +1,13 @@
-"""HF model loading for the Gemma and Llama tracks. Both are gated; expects HF_TOKEN in env."""
+"""HF model loading for the Gemma and Llama tracks. Both are gated; expects HF_TOKEN in env.
 
+Two-token mode: when HF_MODEL_TOKEN is set, it is used for the gated model
+download and HF_TOKEN is reserved for Hub operations (artifact dataset push/pull).
+This supports the case where a teammate accepted the model license but the
+artifact repo is owned by someone else. When HF_MODEL_TOKEN is unset, both
+operations fall back to HF_TOKEN (the common single-token case).
+"""
+
+import os
 from typing import Literal
 
 import torch
@@ -21,16 +29,19 @@ def _load_model_by_key(model_key: str):
 	hf_id = model_cfg["hf_id"]
 	dtype = _DTYPE_MAP[model_cfg["dtype"]]
 
+	model_token = os.environ.get("HF_MODEL_TOKEN") or os.environ.get("HF_TOKEN")
+
 	try:
-		tokenizer = AutoTokenizer.from_pretrained(hf_id)
+		tokenizer = AutoTokenizer.from_pretrained(hf_id, token=model_token)
 		model = AutoModelForCausalLM.from_pretrained(
 			hf_id,
 			torch_dtype=dtype,
 			device_map="auto",
+			token=model_token,
 		)
 	except Exception as e:
 		raise RuntimeError(
-			f"failed to load {hf_id}; check HF_TOKEN and that you've accepted the model license at https://huggingface.co/{hf_id}"
+			f"failed to load {hf_id}; check HF_MODEL_TOKEN (or HF_TOKEN if single-token) and that the account behind that token has accepted the model license at https://huggingface.co/{hf_id}"
 		) from e
 
 	model.eval()
