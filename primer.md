@@ -2,13 +2,13 @@
 
 Live state of the codebase. Update after material changes.
 
-## Current state (2026-05-10)
+## Current state (2026-06-01)
 
-**Stage:** v2 scaffolding complete; no compute spent yet.
+**Stage:** Llama parallel track M1+M2 complete on SageMaker `ml.g6.xlarge` (L4 24GB); Gemma side still unrun. M3 Llama next.
 
-**What runs end-to-end:** nothing yet — code written but unexecuted.
+**What runs end-to-end:** M1 Llama (vectors clean — desperation negatively correlates with all controls), M2 Llama (baseline MMLU 68.51% vs Llama's published ~68%; all 16 steered runs pass the 1pt capability gate).
 
-**Next compute action:** `sanity_test.ipynb` on Colab free T4 (~$0, ~10 min).
+**Next compute action:** `m3_faitheval_llama.ipynb` — FaithEval dose-response + ablation on L4. Tight on VRAM (~3 GB headroom over Llama-8B bf16); if OOM during generation, move to `ml.g6e.xlarge` (L40S 48GB) or drop to 4-bit.
 
 ## Module status
 
@@ -19,8 +19,8 @@ Live state of the codebase. Update after material changes.
 | 2 | Steering + MMLU (Gemma) | ⬜ | ⬜ | — |
 | 3 | FaithEval + orthogonal-projection ablation (Gemma) | ⬜ | ⬜ | — |
 | 4 | Imai 2010 mediation (Gemma — teammate-owned 2026-05-29) | ✅ | ⬜ | — |
-| 1L | Emotion vector extraction (Llama-3.1-8B-Instruct) | ✅ | ⬜ | — |
-| 2L | Steering + MMLU (Llama) | ✅ | ⬜ | — |
+| 1L | Emotion vector extraction (Llama-3.1-8B-Instruct) | ✅ | ✅ 2026-06-01 | `outputs/m1_vectors/llama_L21/` |
+| 2L | Steering + MMLU (Llama) | ✅ | ✅ 2026-06-01 | `outputs/m2/llama_L21/` |
 | 3L | FaithEval + orthogonal-projection ablation (Llama) | ✅ | ⬜ | — |
 
 ## File layout
@@ -89,6 +89,31 @@ desperation-circuit/
 ## M3 classifier validation (limitation — locked 2026-05-17)
 
 100-item stratified hand-audit: 97% raw human–classifier agreement, but dominated by the tautological rule subset. Judge subset (~2% of items) too sparse (n=3) for a reliable estimate and shows the judge returning unparseable verdicts on hedged "context states X but not Y" outputs. **Decision (human-owned): report the directional M3 result with confidence (refusal suppressed, redistributed to off-topic, 4–10σ); treat precise fabricate/refuse magnitudes as classifier-limited; no classifier change, no judge-model swap.** Writeup limitation paragraph drafted (see session recap 2026-05-17). Judge-stratified re-audit deferred to future work — does not affect the qualitative finding.
+
+## Llama L21 results (2026-06-01)
+
+**M1 — pairwise cosines between emotion vectors at L21:**
+
+|             | desperation | calm   | sad    | angry  |
+|-------------|-------------|--------|--------|--------|
+| desperation | 1.000       | −0.579 | −0.544 | −0.100 |
+| calm        | −0.579      | 1.000  | +0.271 | −0.566 |
+| sad         | −0.544      | +0.271 | 1.000  | −0.437 |
+| angry       | −0.100      | −0.566 | −0.437 | 1.000  |
+
+Gate (|cos| with controls ≤ ~0.5 in the contaminating direction): passes — desperation is *negatively* correlated with all controls (correct: controls are well-separated, not contaminated). Layer-21 working default holds; no retune needed.
+
+**M2 — capability gate:**
+
+- Baseline MMLU: **0.6851** (781/1140; matches Llama-3.1-8B published ~0.68).
+- ||h||@L21 = 20.92.
+- All 16 (emotion × α) steered runs pass the 1pt drop tolerance. Per-emotion max usable α = 0.1 (top of the sweep) for every emotion. Largest observed drop = 0.79pt (calm @ α=0.1).
+- Translation: capability gate is non-binding for Llama at this layer. M3 can run the full α-sweep at {0.025, 0.05, 0.075, 0.1}; α=0.1 is the headline dose.
+
+**Infra notes (won't repeat):**
+
+- `device_map="auto"` silently CPU/disk-offloaded layers under VRAM pressure on L4 → forward passes 30-100× slower. Fixed in `src/lib/model_load.py` by pinning to `{"": 0}` — fails clean on OOM instead.
+- Two-token mode in `src/lib/model_load.py`: `HF_MODEL_TOKEN` (gated model download) + `HF_TOKEN` (artifact-repo writes). Used because the mentor accepted the Llama license but Brayden owns the artifact dataset.
 
 ## Decisions log
 
