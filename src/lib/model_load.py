@@ -33,10 +33,14 @@ def _load_model_by_key(model_key: str):
 
 	try:
 		tokenizer = AutoTokenizer.from_pretrained(hf_id, token=model_token)
+		# Pin all params to GPU 0. device_map="auto" can silently offload layers
+		# to CPU/disk under VRAM pressure (e.g. another kernel's leftover process)
+		# which makes every forward pass 30-100x slower. {"": 0} raises a clean
+		# OOM instead of falling back to a useless slow path.
 		model = AutoModelForCausalLM.from_pretrained(
 			hf_id,
 			torch_dtype=dtype,
-			device_map="auto",
+			device_map={"": 0},
 			token=model_token,
 		)
 	except Exception as e:
