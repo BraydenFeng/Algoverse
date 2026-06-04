@@ -37,15 +37,36 @@ def _build_prompt(template: str, context: str, question: str) -> str:
 	return template.format(context=context, question=question)
 
 
+def _build_inputs(tokenizer, prompt: str, use_chat_template: bool):
+	"""Tokenize one prompt, optionally wrapping it as a chat turn.
+
+	Instruct models (Llama-3.1, Gemma-2-IT) only behave as assistants — emitting a
+	stop token after a concise answer — when the prompt goes through their chat
+	template. Fed raw, Llama in particular never stops and rambles to max_new_tokens
+	(bug surfaced in M3 Llama: ~99% of outputs hit the 128-token cap). config.yaml's
+	`uses_chat_template` is the source of truth; the notebook threads it in.
+	"""
+	if use_chat_template:
+		messages = [{"role": "user", "content": prompt}]
+		return tokenizer.apply_chat_template(
+			messages,
+			add_generation_prompt=True,
+			return_tensors="pt",
+			return_dict=True,
+		)
+	return tokenizer(prompt, return_tensors="pt")
+
+
 def _greedy_generate(
 	model,
 	tokenizer,
 	prompt: str,
 	max_new_tokens: int = 128,
 	pre_forward_hook: Callable | None = None,
+	use_chat_template: bool = False,
 ) -> str:
 	"""Greedy decode. pre_forward_hook lets M2.B/M2.C inject steering or ablation."""
-	inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+	inputs = _build_inputs(tokenizer, prompt, use_chat_template).to(model.device)
 
 	hook_handle = None
 	if pre_forward_hook is not None:
@@ -75,6 +96,7 @@ def _greedy_generate_batch(
 	prompts: list[str],
 	max_new_tokens: int = 128,
 	pre_forward_hook: Callable | None = None,
+	use_chat_template: bool = False,
 ) -> list[str]:
 	"""Greedy decode a batch of prompts. Equivalent to calling _greedy_generate once
 	per prompt, up to floating-point reduction order, but amortizes the weight reads
@@ -90,7 +112,17 @@ def _greedy_generate_batch(
 	if tokenizer.pad_token_id is None:
 		tokenizer.pad_token = tokenizer.eos_token
 	try:
-		inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
+		if use_chat_template:
+			conversations = [[{"role": "user", "content": p}] for p in prompts]
+			inputs = tokenizer.apply_chat_template(
+				conversations,
+				add_generation_prompt=True,
+				return_tensors="pt",
+				return_dict=True,
+				padding=True,
+			).to(model.device)
+		else:
+			inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
 
 		hook_handle = None
 		if pre_forward_hook is not None:
@@ -144,6 +176,7 @@ def run_eval(
 	hf_sync_path: str | None = None,
 	force_judge: bool = False,
 	batch_size: int = 1,
+	use_chat_template: bool = False,
 ) -> pd.DataFrame:
 	"""Run FaithEval-unanswerable through `model`.
 
@@ -161,6 +194,11 @@ def run_eval(
 		force_judge: skip the regex rule pass and send every output to the Claude
 			judge. Use for diagnosis when refusal_rate=1.0 or 0.0 looks suspicious
 			(see lib/classifier.classify docstring). Costs N judge calls.
+		batch_size: prompts decoded together per forward pass. 1 = the original
+			single-prompt path; >1 uses left-padded batched generation.
+		use_chat_template: wrap each FaithEval prompt as a chat turn via
+			tokenizer.apply_chat_template before tokenizing. Required for instruct
+			models to answer concisely and stop; pass cfg["models"][key]["uses_chat_template"].
 
 	Returns DataFrame indexed by qid with classification + raw output.
 	"""
@@ -199,11 +237,17 @@ def run_eval(
 		try:
 			if batch_size == 1:
 				outputs = [
-					_greedy_generate(model, tokenizer, prompts[0], pre_forward_hook=pre_forward_hook)
+					_greedy_generate(
+						model, tokenizer, prompts[0],
+						pre_forward_hook=pre_forward_hook,
+						use_chat_template=use_chat_template,
+					)
 				]
 			else:
 				outputs = _greedy_generate_batch(
-					model, tokenizer, prompts, pre_forward_hook=pre_forward_hook
+					model, tokenizer, prompts,
+					pre_forward_hook=pre_forward_hook,
+					use_chat_template=use_chat_template,
 				)
 		except Exception as e:
 			# a single bad row (or transient OOM) shouldn't drop the whole batch —
@@ -213,7 +257,11 @@ def run_eval(
 			for p in prompts:
 				try:
 					outputs.append(
-						_greedy_generate(model, tokenizer, p, pre_forward_hook=pre_forward_hook)
+						_greedy_generate(
+							model, tokenizer, p,
+							pre_forward_hook=pre_forward_hook,
+							use_chat_template=use_chat_template,
+						)
 					)
 				except Exception as e2:
 					outputs.append("")

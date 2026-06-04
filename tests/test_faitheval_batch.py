@@ -124,3 +124,46 @@ def test_batch_generate_left_pads_strips_and_restores():
 	assert tok.padding_side == "right"  # original side restored afterward
 	assert tok.pad_token_id == 7  # pad set from eos when missing
 	assert out == ["10+11", "12+13"]  # shared prompt width (3) sliced off, per-row decode
+
+
+class _TemplateTok:
+	"""Records whether the chat template or the raw tokenizer path was taken."""
+
+	def __init__(self):
+		self.used_chat_template = False
+		self.used_raw = False
+		self.eos_token_id = 0
+
+	def apply_chat_template(self, messages, add_generation_prompt, return_tensors, return_dict, **kw):
+		self.used_chat_template = True
+		# the user content must be wrapped as a single user turn
+		assert messages == [{"role": "user", "content": "hello"}]
+		assert add_generation_prompt is True
+		return _FakeBatch({"input_ids": torch.tensor([[1, 2]])})
+
+	def __call__(self, prompt, return_tensors="pt"):
+		self.used_raw = True
+		return _FakeBatch({"input_ids": torch.tensor([[1, 2]])})
+
+	def decode(self, row, skip_special_tokens=True):
+		return "+".join(str(int(t)) for t in row)
+
+
+class _OneStepModel:
+	device = "cpu"
+	dtype = torch.float32
+
+	def generate(self, input_ids=None, max_new_tokens=None, **kwargs):
+		return torch.cat([input_ids, torch.tensor([[9]])], dim=1)
+
+
+def test_use_chat_template_routes_through_apply_chat_template():
+	tok = _TemplateTok()
+	fe._greedy_generate(_OneStepModel(), tok, "hello", use_chat_template=True)
+	assert tok.used_chat_template and not tok.used_raw
+
+
+def test_default_skips_chat_template():
+	tok = _TemplateTok()
+	fe._greedy_generate(_OneStepModel(), tok, "hello")  # default use_chat_template=False
+	assert tok.used_raw and not tok.used_chat_template
