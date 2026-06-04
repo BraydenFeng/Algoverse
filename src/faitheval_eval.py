@@ -69,6 +69,52 @@ def _greedy_generate(
 	return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 
+def _greedy_generate_batch(
+	model,
+	tokenizer,
+	prompts: list[str],
+	max_new_tokens: int = 128,
+	pre_forward_hook: Callable | None = None,
+) -> list[str]:
+	"""Greedy decode a batch of prompts. Equivalent to calling _greedy_generate once
+	per prompt, up to floating-point reduction order, but amortizes the weight reads
+	across the batch (the dominant cost in batch-1 decode).
+
+	Left-padding is required: decoder-only generation continues from the rightmost
+	token, so every row's true last token must sit flush right. The steering/ablation
+	hooks add a (d_model,) vector that broadcasts over (B, T, d), and padded positions
+	are masked out of attention, so batched output matches the single-prompt path.
+	"""
+	prev_side = tokenizer.padding_side
+	tokenizer.padding_side = "left"
+	if tokenizer.pad_token_id is None:
+		tokenizer.pad_token = tokenizer.eos_token
+	try:
+		inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
+
+		hook_handle = None
+		if pre_forward_hook is not None:
+			hook_handle = pre_forward_hook(model)
+		try:
+			with torch.no_grad():
+				out = model.generate(
+					**inputs,
+					max_new_tokens=max_new_tokens,
+					do_sample=False,
+					temperature=1.0,
+					pad_token_id=tokenizer.pad_token_id,
+				)
+		finally:
+			if hook_handle is not None:
+				hook_handle.remove()
+
+		# every row shares the padded prompt length, so slice it off uniformly
+		gen = out[:, inputs["input_ids"].shape[1] :]
+		return [tokenizer.decode(row, skip_special_tokens=True).strip() for row in gen]
+	finally:
+		tokenizer.padding_side = prev_side
+
+
 def _hf_sync_checkpoint(local_path: Path, repo_id: str, path_in_repo: str) -> None:
 	"""Upload a checkpoint CSV to HF Hub so it survives Colab session death."""
 	try:
@@ -97,6 +143,7 @@ def run_eval(
 	hf_sync_repo: str | None = None,
 	hf_sync_path: str | None = None,
 	force_judge: bool = False,
+	batch_size: int = 1,
 ) -> pd.DataFrame:
 	"""Run FaithEval-unanswerable through `model`.
 
@@ -137,37 +184,60 @@ def run_eval(
 		resume_qids = set(prev["qid"].tolist())
 		print(f"[run_eval] resumed from {checkpoint_path}: {len(resume_qids)} prompts already done")
 
-	for i, row in enumerate(tqdm(ds, desc="FaithEval")):
-		qid = row["qid"]
-		if qid in resume_qids:
-			continue
+	pending = [row for row in ds if row["qid"] not in resume_qids]
+	last_ckpt = len(records)
 
-		prompt = _build_prompt(template, row["context"], row["question"])
+	def _write_checkpoint():
+		pd.DataFrame([asdict(r) for r in records]).to_csv(checkpoint_path, index=False)
+		if hf_sync_repo is not None:
+			_hf_sync_checkpoint(checkpoint_path, hf_sync_repo, hf_sync_path)
+
+	pbar = tqdm(total=len(pending), desc="FaithEval")
+	for start in range(0, len(pending), batch_size):
+		chunk = pending[start : start + batch_size]
+		prompts = [_build_prompt(template, r["context"], r["question"]) for r in chunk]
 		try:
-			output = _greedy_generate(
-				model, tokenizer, prompt, pre_forward_hook=pre_forward_hook
-			)
+			if batch_size == 1:
+				outputs = [
+					_greedy_generate(model, tokenizer, prompts[0], pre_forward_hook=pre_forward_hook)
+				]
+			else:
+				outputs = _greedy_generate_batch(
+					model, tokenizer, prompts, pre_forward_hook=pre_forward_hook
+				)
 		except Exception as e:
-			output = ""
-			print(f"[run_eval] generation failed for qid={qid}: {e}")
+			# a single bad row (or transient OOM) shouldn't drop the whole batch —
+			# fall back to per-prompt so at most one prompt is lost
+			print(f"[run_eval] batch generation failed at offset {start} ({e}); retrying per-prompt")
+			outputs = []
+			for p in prompts:
+				try:
+					outputs.append(
+						_greedy_generate(model, tokenizer, p, pre_forward_hook=pre_forward_hook)
+					)
+				except Exception as e2:
+					outputs.append("")
+					print(f"[run_eval]   per-prompt generation failed: {e2}")
 
-		result = classify(output, row["question"], row["context"], force_judge=force_judge)
-		records.append(
-			EvalRecord(
-				qid=qid,
-				question=row["question"],
-				context=row["context"],
-				output=output,
-				label=result.label,
-				method=result.method,
-				reason=result.reason,
+		for r, output in zip(chunk, outputs):
+			result = classify(output, r["question"], r["context"], force_judge=force_judge)
+			records.append(
+				EvalRecord(
+					qid=r["qid"],
+					question=r["question"],
+					context=r["context"],
+					output=output,
+					label=result.label,
+					method=result.method,
+					reason=result.reason,
+				)
 			)
-		)
 
-		if checkpoint_path is not None and (i + 1) % checkpoint_every == 0:
-			pd.DataFrame([asdict(r) for r in records]).to_csv(checkpoint_path, index=False)
-			if hf_sync_repo is not None:
-				_hf_sync_checkpoint(checkpoint_path, hf_sync_repo, hf_sync_path)
+		pbar.update(len(chunk))
+		if checkpoint_path is not None and len(records) - last_ckpt >= checkpoint_every:
+			_write_checkpoint()
+			last_ckpt = len(records)
+	pbar.close()
 
 	df = pd.DataFrame([asdict(r) for r in records])
 	if checkpoint_path is not None:
