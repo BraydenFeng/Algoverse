@@ -31,8 +31,11 @@ sae:
   release: "google/gemma-scope-9b-pt-res"
   layer: 21
   width: "16k"
-  # l0 target — confirm exact name from sae_lens release registry when M4 mediation runs
-  l0_target: "average_l0_75"
+  # l0 target — confirmed against the gemma-scope-9b-pt-res registry 2026-06-04.
+  # L21/16k offers only: average_l0_{11,19,36,66,129,278}. "average_l0_75" did NOT
+  # exist; 66 is the nearest to the originally-intended ~75. Override if you want a
+  # denser SAE (129 ≈ canonical-ish).
+  l0_target: "average_l0_66"
   # unknown-entity feature index — not published in Ferrando v2 Appendix Q; will be re-derived
   # in M4 via the separation-score recipe (Section 4) on Gemma-2-9B PT.
   unknown_entity_feature_idx: null
