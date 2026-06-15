@@ -21,13 +21,15 @@ Imai decomposition (computed from arms A/B/C only):
 Y is the refusal rate (refuses / n_nonempty) per the M3 conditional convention.
 
 Mediator design choice (load-bearing):
-	The mediator is the unknown-entity latent's activation value at the LAST
-	PROMPT TOKEN at layer 21. During generation we re-clamp at every forward
-	pass — the clamp value stays at the prompt-final value, not per-generated-
-	token. Rationale: FaithEval prompts have no explicit entity tokens, so the
-	last-prompt-token position is the natural "where the model is about to
-	decide" location. Re-clamping per step keeps the intervention from washing
-	out after one token.
+	The mediator is the unknown-entity latent's activation value at the
+	ENTITY-TOKEN position at layer 21 — the prompt position where the latent
+	actually fires, located by `_entity_position()` (argmax of the latent's
+	activation across the prompt; falls back to the last token if it never
+	fires). Capturing at the LAST prompt token instead reads identically zero,
+	because this latent fires on the entity mention, not the decision token —
+	last-token capture made the mediator degenerate (M ≡ 0) and the whole
+	decomposition collapse. During generation we re-clamp at every forward pass
+	so the intervention does not wash out after one token.
 
 Intervention math (per-latent swap, not full SAE reconstruction):
 	original residual: h
@@ -66,6 +68,35 @@ def _last_prompt_token_idx(tokenizer, prompt: str) -> int:
 	"""Return the 0-indexed position of the final token of the prompt."""
 	ids = tokenizer(prompt, add_special_tokens=True).input_ids
 	return len(ids) - 1
+
+
+def _entity_position(model, sae, enc, layer: int, latent_idx: int) -> int:
+	"""Prompt position where mediator latent `latent_idx` fires hardest.
+
+	The unknown-entity latent does NOT fire at the FaithEval decision (last
+	prompt) token — capturing there reads identically zero, which makes the
+	mediator degenerate. It fires on the *entity* mention. We run one forward
+	pass, encode the layer-`layer` residual through the SAE, and return the
+	argmax position of the latent across the prompt. Falls back to the last
+	token when the latent never fires (max activation == 0).
+	"""
+	cap: dict = {}
+
+	def _grab(_module, _args, output):
+		cap["h"] = (output[0] if isinstance(output, tuple) else output).detach()
+		return output
+
+	handle = model.model.layers[layer].register_forward_hook(_grab)
+	try:
+		with torch.no_grad():
+			model(**enc)
+	finally:
+		handle.remove()
+
+	with torch.no_grad():
+		acts = sae.encode(cap["h"][0].to(next(sae.parameters()).dtype))
+	col = acts[:, latent_idx]
+	return int(col.argmax()) if float(col.max()) > 0 else enc["input_ids"].shape[1] - 1
 
 
 def make_mediator_capture_hook(
@@ -266,7 +297,7 @@ def format_result(res: MediationResult) -> str:
 		f"Direct effect (ADE = Y_C - Y_A):               {res.ade:+.4f}",
 		f"Decomposition check (ACME + ADE vs TE):        {res.te_check:+.4f} vs {res.te:+.4f}",
 		"",
-		f"Mediator value stats (latent activation at last prompt token):",
+		f"Mediator value stats (latent activation at entity token):",
 	])
 	for arm, val in res.mediator_baseline.items():
 		lines.append(f"  {arm}: mean={val:.4f}")

@@ -15,6 +15,7 @@ from src.m4_mediation import (
 	make_mediator_capture_hook,
 	make_mediator_clamp_hook,
 	make_rescue_hook,
+	_entity_position,
 	_last_prompt_token_idx,
 )
 
@@ -73,6 +74,34 @@ def test_last_prompt_token_idx():
 			return types.SimpleNamespace(input_ids=list(range(len(prompt.split()) + 1)))
 
 	assert _last_prompt_token_idx(_Tok(), "alpha beta gamma") == 3  # 3 words + 1 special - 1
+
+
+class _ForwardModel:
+	"""Callable model whose __call__ runs the captured layer so a forward hook
+	fires — minimal stand-in for `_entity_position`'s single forward pass."""
+
+	def __init__(self, layer, resid):
+		self.model = types.SimpleNamespace(layers=[layer])
+		self._resid = resid
+
+	def __call__(self, **enc):
+		return self.model.layers[0](self._resid)
+
+
+def test_entity_position_returns_argmax_firing_token():
+	# latent 2 fires hardest at token 1 (value 9) -> entity position is 1, not last
+	resid = torch.tensor([[[0.0, 0, 0, 0], [1.0, 2, 9, 4], [0.0, 0, 1, 0]]])
+	model = _ForwardModel(_IdentityLayer(), resid)
+	enc = {"input_ids": torch.zeros(1, 3, dtype=torch.long)}
+	assert _entity_position(model, _FakeSAE(), enc, layer=0, latent_idx=2) == 1
+
+
+def test_entity_position_falls_back_to_last_token_when_latent_silent():
+	# latent 2 never fires (all zero) -> fall back to last prompt token (T-1 = 2)
+	resid = torch.tensor([[[0.0, 0, 0, 0], [1.0, 2, 0, 4], [0.0, 0, 0, 0]]])
+	model = _ForwardModel(_IdentityLayer(), resid)
+	enc = {"input_ids": torch.zeros(1, 3, dtype=torch.long)}
+	assert _entity_position(model, _FakeSAE(), enc, layer=0, latent_idx=2) == 2
 
 
 def test_capture_hook_reads_latent_at_target_token():
