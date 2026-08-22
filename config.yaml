@@ -28,7 +28,7 @@ sae:
   # from the BASE model SAEs (PT), then shows the directions transfer to the IT chat model
   # — so the SAE here is -pt-res even though our model under study is -it.
   # PT SAEs exist on every layer; IT SAEs only exist at {10, 21, 32}.
-  release: "google/gemma-scope-9b-pt-res"
+  release: "gemma-scope-9b-pt-res"  # registered sae_lens release name, NOT the repo id (google/...) — newer sae_lens rejects the repo path and 404s on cfg.json
   layer: 21
   width: "16k"
   # l0 target — confirmed against the gemma-scope-9b-pt-res registry 2026-06-04.
