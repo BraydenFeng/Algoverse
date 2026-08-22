@@ -434,6 +434,53 @@ def rank_candidates(
 	return df
 
 
+def _capture_mediators(
+	model, tokenizer, sae, *,
+	latent_idx: int,
+	layer: int,
+	n_prompts: int,
+	use_chat_template: bool,
+) -> dict[str, float]:
+	"""Per-prompt baseline activation of `latent_idx` at its entity position.
+
+	Forward-only (~0.3s/prompt vs ~3s with generation). The rescue arm needs
+	M_j(0) per prompt as its clamp target, but it does not need arm A's text, so
+	the screen captures these directly instead of re-running a full arm.
+	"""
+	cfg = load_config()
+	ds = load_dataset(cfg["faitheval"]["hf_dataset"], split="test").select(range(n_prompts))
+	template = cfg["faitheval"]["prompt_template"]
+	out: dict[str, float] = {}
+
+	for row in tqdm(ds, desc=f"m5:capture[{latent_idx}]"):
+		prompt = template.format(context=row["context"], question=row["question"])
+		try:
+			enc = _inputs(tokenizer, prompt, use_chat_template, model.device)
+			tok_idx = _entity_position(model, sae, enc, layer, latent_idx)
+			cap: dict = {}
+
+			def grab(_m, _a, output):
+				h = output[0] if isinstance(output, tuple) else output
+				if h.shape[1] > tok_idx:
+					vec = h[0, tok_idx, :].float()
+					with torch.no_grad():
+						a = sae.encode(vec.unsqueeze(0).to(next(sae.parameters()).dtype)).squeeze(0)
+					cap["v"] = float(a[latent_idx].item())
+				return output
+
+			handle = model.model.layers[layer].register_forward_hook(grab)
+			try:
+				with torch.no_grad():
+					model(**enc)
+			finally:
+				handle.remove()
+			out[row["qid"]] = cap.get("v", float("nan"))
+		except Exception as e:
+			print(f"[m5:capture] qid={row['qid']} failed: {e}")
+			out[row["qid"]] = float("nan")
+	return out
+
+
 def screen_latents(
 	model, tokenizer, sae, *,
 	candidates: list[int],
@@ -442,56 +489,116 @@ def screen_latents(
 	model_key: str = "primary",
 	n_prompts: int = 150,
 	threshold_pts: float = 3.0,
+	emotion: str = "desperation",
 ) -> pd.DataFrame:
 	"""M5.C phase 2 — per-candidate rescue screen. THE GO/NO-GO.
 
-	For each candidate: fabrication(steered) - fabrication(rescue-on-that-latent),
-	in points. That is the latent's ACME. Pre-registered decision rule:
-		any candidate >= threshold_pts -> CLEAR    (localizable; run the full screen)
+	Arms A and B are latent-independent: A's hook only reads the latent and B
+	steers every position before reading, so neither modifies the residual and
+	their generations are identical whichever candidate is being screened. They
+	are therefore run ONCE and shared, and only the rescue arm (steer + clamp
+	latent j to its own per-prompt baseline) is repeated per candidate. That is
+	2 + N generation sweeps rather than 4N.
+
+	ACME_j = fabrication(B) - fabrication(C_j), in points. Decision rule:
+		any candidate >= threshold_pts -> CLEAR       (localizable)
 		structure but none clear       -> DISTRIBUTED (pivot to group/subspace)
-		nothing moves                  -> DEAD     (stop; do not commit further)
+		nothing moves                  -> DEAD        (stop)
 	"""
 	cfg = load_config()
 	repo = cfg["paths"]["hf_artifact_repo"]
-	rows = []
-	steered_fab = None
+	use_ct = bool(cfg["models"][model_key].get("uses_chat_template", False))
+	run_tag = f"L{layer}_a{alpha:g}"
+	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m5_screen" / run_tag
+	out_dir.mkdir(parents=True, exist_ok=True)
+	repo_dir = f"m5_screen/{run_tag}"
 
-	for j, latent_idx in enumerate(candidates):
-		print(f"\n[m5:screen] candidate {j+1}/{len(candidates)}: latent {latent_idx}")
-		out = run_mediation(
-			model, tokenizer, sae, latent_idx=latent_idx, layer=layer, alpha=alpha,
-			model_key=model_key, limit=n_prompts,
-			tag=f"screen_L{layer}_a{alpha:g}/latent_{latent_idx}",
+	vec = load_emotion_vector(emotion, model_key=model_key)
+	norm_scale = estimate_residual_norm(
+		model, tokenizer, layer=layer, calibration_texts=_neutral_texts(cfg),
+		token_skip=cfg["extraction"]["token_skip"],
+	)
+	steer = _steering_tensor(vec, alpha, norm_scale, model)
+	anchor = int(candidates[0])
+
+	shared = dict(
+		model=model, tokenizer=tokenizer, sae=sae, layer=layer, latent_idx=anchor,
+		repo=repo, limit=n_prompts, use_chat_template=use_ct,
+	)
+
+	print("[m5:screen] shared arm A (baseline)")
+	df_a = _run_arm(
+		arm_name="A_shared",
+		hook_for=lambda qid, t, cap: make_mediator_capture_hook(sae, anchor, layer, t, cap),
+		checkpoint_path=out_dir / "arm_A_shared.csv",
+		repo_path=f"{repo_dir}/arm_A_shared.csv", **shared,
+	)
+	print("[m5:screen] shared arm B (steered)")
+	df_b = _run_arm(
+		arm_name="B_shared",
+		hook_for=lambda qid, t, cap: _steer_and_capture_hook(sae, anchor, layer, t, steer, cap),
+		checkpoint_path=out_dir / "arm_B_shared.csv",
+		repo_path=f"{repo_dir}/arm_B_shared.csv", **shared,
+	)
+	fab_a = _rates(df_a)["fabricate"]
+	fab_b = _rates(df_b)["fabricate"]
+	print(f"[m5:screen] baseline fab={fab_a:.3f}  steered fab={fab_b:.3f}  TE={100*(fab_b-fab_a):+.1f} pts")
+
+	rows = []
+	for k, latent_idx in enumerate(candidates):
+		latent_idx = int(latent_idx)
+		print(f"\n[m5:screen] candidate {k+1}/{len(candidates)}: latent {latent_idx}")
+		clamp = _capture_mediators(
+			model, tokenizer, sae, latent_idx=latent_idx, layer=layer,
+			n_prompts=n_prompts, use_chat_template=use_ct,
 		)
-		r = out["rates"]
-		acme_pts = (r["B"]["fabricate"] - r["C"]["fabricate"]) * 100
-		steered_fab = r["B"]["fabricate"]
+
+		def rescue_hook(qid, t, cap, _idx=latent_idx, _clamp=clamp):
+			v = float(_clamp.get(qid, float("nan")))
+			if not np.isfinite(v):
+				return None
+			cap["value"] = v
+			return make_rescue_hook(
+				sae=sae, latent_idx=_idx, layer=layer, target_token_idx=t,
+				clamp_value=v, steering_vector_on_device=steer,
+			)
+
+		df_c = _run_arm(
+			arm_name=f"C_latent{latent_idx}", hook_for=rescue_hook,
+			checkpoint_path=out_dir / f"arm_C_latent{latent_idx}.csv",
+			repo_path=f"{repo_dir}/arm_C_latent{latent_idx}.csv",
+			model=model, tokenizer=tokenizer, sae=sae, layer=layer,
+			latent_idx=latent_idx, repo=repo, limit=n_prompts, use_chat_template=use_ct,
+		)
+		fab_c = _rates(df_c)["fabricate"]
+		acme = (fab_b - fab_c) * 100
 		rows.append({
 			"latent_idx": latent_idx,
-			"fab_baseline": r["A"]["fabricate"],
-			"fab_steered": r["B"]["fabricate"],
-			"fab_rescue": r["C"]["fabricate"],
-			"fab_suppress": r["D"]["fabricate"],
-			"acme_pts": acme_pts,
-			"te_pts": (r["B"]["fabricate"] - r["A"]["fabricate"]) * 100,
+			"fab_baseline": fab_a,
+			"fab_steered": fab_b,
+			"fab_rescue": fab_c,
+			"acme_pts": acme,
+			"te_pts": (fab_b - fab_a) * 100,
+			"mediator_baseline_mean": float(np.nanmean(list(clamp.values()))),
 		})
-		print(f"[m5:screen] latent {latent_idx}: ACME = {acme_pts:+.1f} pts")
+		print(f"[m5:screen] latent {latent_idx}: ACME = {acme:+.1f} pts")
+
+		df = pd.DataFrame(rows).sort_values("acme_pts", key=abs, ascending=False)
+		df.to_csv(out_dir / "screen.csv", index=False)
+		_upload(out_dir / "screen.csv", repo, f"{repo_dir}/screen.csv")
 
 	df = pd.DataFrame(rows).sort_values("acme_pts", key=abs, ascending=False)
 	best = float(df["acme_pts"].abs().max()) if len(df) else 0.0
 	if best >= threshold_pts:
-		verdict = f"CLEAR — latent {int(df.iloc[0]['latent_idx'])} carries {best:.1f} pts. Run the full screen."
+		verdict = f"CLEAR - latent {int(df.iloc[0]['latent_idx'])} carries {best:.1f} pts. Run the full screen."
 	elif best >= 1.0:
-		verdict = f"DISTRIBUTED — best single latent only {best:.1f} pts. Pivot to group/subspace mediation."
+		verdict = f"DISTRIBUTED - best single latent only {best:.1f} pts. Pivot to group/subspace mediation."
 	else:
-		verdict = f"DEAD — no latent moves fabrication ({best:.1f} pts). Do not commit further."
+		verdict = f"DEAD - no latent moves fabrication ({best:.1f} pts). Do not commit further."
 
-	out_dir = Path(cfg["paths"]["outputs_dir"]) / "m5_screen" / f"L{layer}_a{alpha:g}"
-	out_dir.mkdir(parents=True, exist_ok=True)
-	df.to_csv(out_dir / "screen.csv", index=False)
-	text = df.to_string(index=False) + f"\n\nsteered fabrication = {steered_fab}\n\n{verdict}\n"
+	text = df.to_string(index=False) + f"\n\nbaseline={fab_a:.3f} steered={fab_b:.3f} n={n_prompts}\n\n{verdict}\n"
 	(out_dir / "verdict.txt").write_text(text, encoding="utf-8")
-	_upload(out_dir / "screen.csv", repo, f"m5_screen/L{layer}_a{alpha:g}/screen.csv")
-	_upload(out_dir / "verdict.txt", repo, f"m5_screen/L{layer}_a{alpha:g}/verdict.txt")
+	_upload(out_dir / "screen.csv", repo, f"{repo_dir}/screen.csv")
+	_upload(out_dir / "verdict.txt", repo, f"{repo_dir}/verdict.txt")
 	print("\n" + text)
 	return df
