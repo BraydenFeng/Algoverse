@@ -182,8 +182,14 @@ def _run_arm(
 	if checkpoint_path.exists():
 		try:
 			prev = pd.read_csv(checkpoint_path)
-			records = [M5Record(**r) for r in prev.to_dict(orient="records")]
-			done = set(prev["qid"].tolist())
+			all_rows = [M5Record(**r) for r in prev.to_dict(orient="records")]
+			# entity_pos == -1 marks a prompt that failed (usually OOM). Drop it so the
+			# resume retries it — otherwise long prompts are silently and non-randomly lost.
+			records = [r for r in all_rows if int(r.entity_pos) >= 0]
+			n_retry = len(all_rows) - len(records)
+			if n_retry:
+				print(f"[m5:{arm_name}] retrying {n_retry} previously-failed prompts")
+			done = {r.qid for r in records}
 			print(f"[m5:{arm_name}] resumed {len(done)} prompts")
 		except Exception as e:
 			print(f"[m5:{arm_name}] checkpoint unreadable ({e}); starting fresh")
@@ -209,6 +215,30 @@ def _run_arm(
 			finally:
 				if handle is not None:
 					handle.remove()
+		except torch.cuda.OutOfMemoryError as e:
+			torch.cuda.empty_cache()
+			print(f"[m5:{arm_name}] OOM on qid={row['qid']}, retrying after cache clear")
+			try:
+				enc = _inputs(tokenizer, prompt, use_chat_template, model.device)
+				tok_idx = _entity_position(model, sae, enc, layer, latent_idx)
+				factory = hook_for(row["qid"], tok_idx, capture)
+				handle = factory(model) if factory is not None else None
+				try:
+					with torch.no_grad():
+						out = model.generate(
+							**enc, max_new_tokens=max_new_tokens, do_sample=False,
+							pad_token_id=tokenizer.eos_token_id,
+						)
+					text = tokenizer.decode(
+						out[0][enc["input_ids"].shape[1]:], skip_special_tokens=True
+					).strip()
+				finally:
+					if handle is not None:
+						handle.remove()
+			except Exception as e2:
+				print(f"[m5:{arm_name}] qid={row['qid']} failed after retry: {e2}")
+				text, tok_idx = "", -1
+				torch.cuda.empty_cache()
 		except Exception as e:
 			print(f"[m5:{arm_name}] qid={row['qid']} failed: {e}")
 			text, tok_idx = "", -1

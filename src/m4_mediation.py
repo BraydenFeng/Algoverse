@@ -93,10 +93,17 @@ def _entity_position(model, sae, enc, layer: int, latent_idx: int) -> int:
 	finally:
 		handle.remove()
 
-	with torch.no_grad():
-		acts = sae.encode(cap["h"][0].to(next(sae.parameters()).dtype))
-	col = acts[:, latent_idx]
-	return int(col.argmax()) if float(col.max()) > 0 else enc["input_ids"].shape[1] - 1
+	try:
+		with torch.no_grad():
+			acts = sae.encode(cap["h"][0].to(next(sae.parameters()).dtype))
+		col = acts[:, latent_idx]
+		idx = int(col.argmax()) if float(col.max()) > 0 else enc["input_ids"].shape[1] - 1
+	finally:
+		# (T, d_sae) on a long prompt is hundreds of MB; holding it through generation
+		# is what pushes an already-full GPU over the edge
+		cap.clear()
+		acts = col = None
+	return idx
 
 
 def make_mediator_capture_hook(
